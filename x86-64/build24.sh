@@ -316,9 +316,10 @@ fi
 # runner 16GB 内存，直接 OOM：
 #     dd: memory exhausted by input buffer of size 21474836480 bytes (20 GiB)
 #
-# 24.10 一直没撞上是因为它的 10G / 20G 走 gen_image_generic.sh（dd seek 铺空文件），
-# 不经过 pad-to；25.12 换成了 Makefile 里的 pad-to，所以那边先炸（run 41210722525）。
-# 这里照样打一遍：命中就改，压根没这个模式就跳过 —— 24.10 上大概率是后者。
+# 24.10 的 combined-efi 不走 pad-to，走 scripts/gen_image_generic.sh，
+# 所以这一段在 24.10 上大概率「未命中、跳过」—— 真正管用的是下面那段
+# gen_image_generic 的补丁。25.12 那边 Image/pad-to 会被命中（run 41210722525）。
+# 这里照样打一遍：命中就改，压根没这个模式就跳过。
 #
 # 改法：bs 固定 1M（缓冲区 1MiB），复制完 truncate 到目标逻辑大小。
 # 中间是空洞、稀疏，产物与原来一致。
@@ -342,6 +343,50 @@ else
     echo "==> [patch] Image/pad-to 未命中（本版 image 生成不走它），跳过"
 fi
 
+# 【v.180.200】gen_image_generic.sh 里那条 dd if=/dev/zero —— 大档位爆盘的真因。
+#
+# 24.10 的 combined-efi.img.gz 走 Build/combined → scripts/gen_image_generic.sh，
+# 里面有这一行：
+#   [ -n "$PADDING" ] && dd if=/dev/zero of="$OUTPUT" bs=512 seek="$ROOTFSOFFSET" conv=notrunc count="$ROOTFSSIZE"
+# ROOTFSSIZE 是**扇区数**：256G 档 = 469762048 扇区 = 224GiB，而且没有 conv=sparse。
+# 也就是说这 224GiB 零是实打实写进磁盘的，不是空洞。
+#
+# 之前 10G / 20G 能过，不是因为「dd seek 铺的是空文件」，是因为 10G/20G 恰好
+# 小于 runner 的 109G 可用空间，硬写也写得下 —— 纯属幸存者偏差。256G 一跑就露馅：
+# 卡在 dd 那一行，写到 109G 报 No space left on device。
+#
+# 改法：整行换成 truncate，把文件长度直接撑到「kernel 区 + rootfs 区 + GPT 备份区」。
+# truncate 只改 inode 长度、不写数据，中间全是空洞，磁盘占用仍是几百 MB；
+# gzip 读到的逻辑长度不变，分区照样是 224G。
+_GIS="scripts/gen_image_generic.sh"
+if [ -f "$_GIS" ] && grep -q 'dd if=/dev/zero of="\$OUTPUT" bs=512 seek="\$ROOTFSOFFSET"' "$_GIS" 2>/dev/null; then
+    if ! command -v truncate >/dev/null 2>&1; then
+        echo "::error::容器里没有 truncate，大分区档会写满磁盘，终止"
+        exit 1
+    fi
+    # 不用 sed：这条正则里 [ ] & $ 全是元字符，转义错一个就静默改坏脚本。
+    # 改成「按行号切三段、中间整行换掉」——纯文本匹配，行为可预期。
+    _LN=$(grep -n 'dd if=/dev/zero of="\$OUTPUT" bs=512 seek="\$ROOTFSOFFSET"' "$_GIS" | head -n1 | cut -d: -f1)
+    if [ -n "$_LN" ]; then
+        {
+            head -n $((_LN - 1)) "$_GIS"
+            printf '%s\n' '[ -n "$PADDING" ] && truncate -s $(( (ROOTFSOFFSET + ROOTFSSIZE + ${sect:-0}) * 512 )) "$OUTPUT"'
+            tail -n +$((_LN + 1)) "$_GIS"
+        } > /tmp/gis.new
+        # 用 cat 覆盖而不是 mv：这个脚本是直接被执行的，要保住原文件的权限位
+        cat /tmp/gis.new > "$_GIS" && rm -f /tmp/gis.new
+    fi
+    if grep -q 'truncate -s \$(( (ROOTFSOFFSET + ROOTFSSIZE' "$_GIS" 2>/dev/null && \
+       [ "$(grep -c 'dd if=/dev/zero of="\$OUTPUT" bs=512 seek="\$ROOTFSOFFSET"' "$_GIS")" = "0" ]; then
+        echo "==> [patch] gen_image_generic.sh 已改：写零 dd 换成 truncate（大档位不再爆盘）"
+    else
+        echo "::error::gen_image_generic.sh 没改成功，128G/256G 档会写满磁盘后失败，终止"
+        exit 1
+    fi
+else
+    echo "==> [patch] gen_image_generic.sh 未命中（上游可能已改），跳过"
+fi
+
 make image PROFILE="generic" PACKAGES="$PACKAGES" FILES="/home/build/immortalwrt/files" ROOTFS_PARTSIZE=$ROOTFS_MB
 
 if [ $? -ne 0 ]; then
@@ -355,9 +400,10 @@ fi
 # 只删镜像产物：packages/ 与 profiles.json 是第二遍要用的，一个都不能碰。
 # 第二遍 make image 每次都重新 install，删掉会照常重建，产物完整性不受影响。
 #
-# 稀疏性得现场说清楚：gen_image_generic 用 dd seek 铺空文件，理论上一份
-# 20G 的 img 实际只占几百 MB；但后续 cp 若没带 --sparse 会被实体化成 20G。
-# 到底是哪种，只有数字能定性 —— 所以这里同时打两个数：
+# 稀疏性得现场说清楚：gen_image_generic 原来那条 dd if=/dev/zero 写的是**实体零**，
+# 一份 224G 的 img 就真占 224G —— 256G 档爆盘正是它（已由上面的 truncate 补丁改掉）。
+# 打过补丁后 img 才是稀疏的，理论上一份 224G 的 img 只占几百 MB；但后续 cp 若没带
+# --sparse 会被实体化。到底是哪种，只有数字能定性 —— 所以这里同时打两个数：
 #   df  可用空间（真正被吃掉的盘）
 #   du  目录实际占用
 # du 远小于 img 逻辑大小 → 稀疏，这段清理省的是逻辑大小、不是真盘；
