@@ -121,8 +121,11 @@ jobs:
     # 所以下面会把实际用到的版本写进 Release 说明（router-info.md），保证可回溯。
     env:
       CROWDSEC_VERSION: ""
-    # docker run / git clone 卡住会吃满 6 小时默认上限，显式收口
-    timeout-minutes: 120
+    # docker run / git clone 卡住会吃满 6 小时默认上限，显式收口。
+    # 120 -> 180：大档位不是「产物变大」，是 gzip 要把整个分区的逻辑字节读一遍。
+    # 实测零数据压缩约 142MB/s（level 6），224G 单遍约 27 分钟，两遍 55 分钟，
+    # 叠上正常编译 20~40 分钟，120 分钟会压线。180 留出余量，不至于跑到最后超时白等。
+    timeout-minutes: 180
 
     steps:
       - name: Checkout Code
