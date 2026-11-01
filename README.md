@@ -1,4 +1,4 @@
-# 这是什么
+# IP网关DNS为固定，请提前规划。
 
 ![这是什么 · 九组链式置位](docs/bp-nine-group-flow.png)
 
