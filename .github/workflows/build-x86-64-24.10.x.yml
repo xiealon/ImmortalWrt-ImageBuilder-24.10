@@ -479,9 +479,11 @@ jobs:
         with:
           tag_name: Autobuild-x86-64
           body_path: ${{ github.workspace }}/router-info.md
+          # 只传最终刷机用的镜像。rootfs.tar.gz 是整盘根文件系统包，
+          # 刷机用不上，传上去只是白占 Release 配额，这里与 25.12 保持一致不再上传。
+          # 改名步骤仍然会给 rootfs.tar.gz 加后缀，将来若要重新上传，加一行 glob 即可。
           files: |
             ${{ github.workspace }}/bin/targets/x86/64/*-combined-efi*.img.gz
-            ${{ github.workspace }}/bin/targets/x86/64/*-rootfs*.tar.gz
           token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
