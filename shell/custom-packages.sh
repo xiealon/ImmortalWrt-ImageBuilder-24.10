@@ -4,7 +4,14 @@
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES aria2 luci-app-aria2 luci-i18n-aria2-zh-cn"
 
-CUSTOM_PACKAGES="$CUSTOM_PACKAGES banip luci-app-banip luci-i18n-banip-zh-cn"
+# 【2026-11-02】banip 移除（用户定：用不到）。
+# 25.12 真机实测：三包都在、init.d ENABLED，但 ban_enabled '0'、主程序从未启动、
+# 无 pidfile、无 feed、nft 里无 banip 的 set —— 一件活都没干。
+# 根因是这台机器没有 WAN（只有 br-lan 192.168.1.201/24），不承担转发，
+# banip 拦的是经过本机的转发/入站流量，没 WAN 就一条都用不上。
+# 同类功能已由 crowdsec 覆盖：nft 里 table ip crowdsec 的三个 set 在生效，
+# 防爆破也走 crowdsec 的 ssh 场景。
+# 24 线这里是三包全列，删整行即整组不进固件。
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES ca-certificates acme luci-app-acme luci-i18n-acme-zh-cn"
 
@@ -23,9 +30,18 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES ddns-go luci-app-ddns-go luci-i18n-ddns-go-zh-
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES dockerd luci-app-dockerman luci-i18n-dockerman-zh-cn cgroup-tools kmod-veth"
 
-CUSTOM_PACKAGES="$CUSTOM_PACKAGES easytier luci-app-easytier"
+# 【2026-11-02】easytier 整组移除（用户定：组网只留 tailscale）。
+# easytier 是 P2P 组网工具，与 zerotier / tailscale 同属「把设备连成虚拟局域网」，
+# 功能定位重复。这条只在 24 线清单里有（25 线从来不带），所以归并 7 个穿透工具
+# 时漏掉了 —— 201 是 25 线构建的，`apk info | grep easytier` 为空，看不到它。
+# 24 线新固件本来会把它带进去，等于刚去掉 zerotier 又留了个功能一样的替代品。
+# 整行删掉即不进固件；imm.config 里没有对应的 CONFIG_PACKAGE_easytier 条目。
 
-CUSTOM_PACKAGES="$CUSTOM_PACKAGES eoip luci-app-eoip luci-i18n-eoip-zh-cn"
+# 【2026-11-02】eoip 整组移除（用户定）。EoIP 是二层 GRE 隧道，要求两端都能直连
+# 建立 GRE；本机是旁路由（uci get network.wan.device 为空、只有 br-lan），没有
+# 公网 IP，这条路走不通。这一行一次带进 3 个包（eoip / luci-app-eoip / i18n），
+# 整行删掉即不进固件；imm.config 里 CONFIG_PACKAGE_eoip / luci-app-eoip 本就是
+# not set（第 6377 / 5312 行），不必动 config。
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES etherwake luci-app-timewol luci-i18n-timewol-zh-cn"
 
@@ -33,7 +49,12 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES geoview sing-box luci-compat kmod-tun kmod-ine
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES hd-idle luci-app-hd-idle luci-i18n-hd-idle-zh-cn"
 
-CUSTOM_PACKAGES="$CUSTOM_PACKAGES keepalived luci-app-keepalived luci-i18n-keepalived-zh-cn"
+# 【2026-11-02】keepalived 移除（用户定：旁路由用不到）。
+# keepalived 是 VRRP 主备漂移，要至少两台机器跑同一 VRRP 组、共享一个漂移 VIP。
+# 当日 25.12 真机实测：4 个包都在，init.d ENABLED，但 UCI option enabled '0'、
+# 进程未起、无漂移 VIP；/etc/keepalived/keepalived.conf 与 /rom 出厂逐字节一致
+# （cmp 通过），里面的 vrrp_instance VI_1 是包自带示例，不是配置。
+# 24 线这里是三包全列（keepalived + luci-app + i18n），删整行即整组不进固件。
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES kmod-fs-cifs cifsmount luci-app-cifs-mount luci-i18n-cifs-mount-zh-cn"
 
@@ -50,7 +71,10 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES kmod-fs-cifs cifsmount luci-app-cifs-mount luc
 #   tcping / libopenssl3 —— 通用件
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES kmod-nft-tproxy kmod-nft-socket v2ray-geoip v2ray-geosite microsocks dns2socks ipt2socks chinadns-ng tcping libopenssl3"
 
-CUSTOM_PACKAGES="$CUSTOM_PACKAGES kmod-usb-printer luci-app-usb-printer luci-i18n-usb-printer-zh-cn"
+# 【2026-11-02】usb_printer 移除，USB 打印共享只留 p910nd（下面 p910nd 那行）。
+# 两者是同一件事的两个界面：/etc/init.d/usb_printer 唯一动作是 killall p910nd。
+# 25.12 真机实测：/etc/config/usb_printer 是 0 字节、9100 端口没监听、无进程；
+# p910nd 配置有内容。kmod-usb-printer 由下面 p910nd 那条继续带着，这里不重复列。
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES ksmbd-server kmod-fs-ksmbd kmod-fs-smbfs-common luci-app-ksmbd luci-i18n-ksmbd-zh-cn"
 
@@ -58,7 +82,19 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES liblxc lxc lxc-common lxc-templates lxc-attach
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-3ginfo-lite luci-i18n-3ginfo-lite-zh-cn usb-modeswitch usbutils"
 
-CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-acl luci-i18n-acl-zh-cn"
+# 【2026-11-02】luci-app-acl 移除（用户定）。
+# 它是 LuCI 的「系统 → 管理权」ACL 图形编辑页（改 /etc/config/rpcd 的 ACL 段）。
+# 25 线已把这块并进 luci-base 自理，不再有独立包；201 是 25 线构建的，45 个
+# luci-app 里本来就没有它 —— 所以这条只影响 24 线固件。
+# 删了只丢图形编辑界面，rpcd 的 ACL 仍可用 uci / 直接编辑 /etc/config/rpcd 配。
+# 24 线这里是 luci-app-acl + i18n 两包，删整行即整组不进固件。
+
+# 【2026-11-02】adblock（用户当日定：先留着，也保护起来）。
+# 这条链是 i18n → luci-app-adblock → adblock，写一行三个全装；
+# imm.config 里 CONFIG_PACKAGE_adblock / CONFIG_PACKAGE_luci-app-adblock 都是 not set，
+# 所以固件里有没有这套全看这一行。加了它必须同步进 pkg-restore-apps.sh 的
+# _PA_ADBLOCK 与 build24.sh 的 _PC_WANT，否则「装上了但被 remove 掉没人管」。
+CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-i18n-adblock-zh-cn"
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-openvpn luci-i18n-openvpn-zh-cn openvpn-openssl"
 
@@ -66,7 +102,14 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-partexp luci-i18n-partexp-zh-cn e2fsp
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-rtp2httpd luci-i18n-rtp2httpd-zh-cn"
 
-CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-strongswan-swanctl strongswan-swanctl strongswan-mod-vici strongswan-charon strongswan-mod-aes strongswan-mod-attr strongswan-mod-connmark strongswan-mod-constraints strongswan-mod-des strongswan-mod-dnskey strongswan-mod-fips-prf strongswan-mod-gmp strongswan-mod-hmac strongswan-mod-openssl strongswan-mod-kernel-netlink strongswan-mod-md5 strongswan-mod-mgf1 strongswan-mod-pem strongswan-mod-pgp strongswan-mod-pkcs1 strongswan-mod-pubkey strongswan-mod-random strongswan-mod-rc2 strongswan-mod-resolve strongswan-mod-revocation strongswan-mod-sha1 strongswan-mod-sha2 strongswan-mod-socket-default strongswan-mod-sshkey strongswan-mod-updown strongswan-mod-x509 strongswan-mod-xauth-generic strongswan-mod-xcbc swanmon davici crconf libjson-c5 glib2 kmod-ipsec kmod-ipsec4 kmod-ipsec6 kmod-crypto-manager kmod-crypto-aead kmod-crypto-authenc kmod-crypto-cbc kmod-crypto-des kmod-crypto-echainiv kmod-crypto-hmac kmod-crypto-md5 kmod-crypto-sha1 kmod-lib-zlib-inflate kmod-lib-zlib-deflate"
+# 【2026-11-02】strongswan 整组移除（用户定：用不到）。
+# 原来这一行一次带进 52 个包：luci-app-strongswan-swanctl / strongswan-swanctl /
+# strongswan-charon / 30 个 strongswan-mod-* / swanmon davici crconf libjson-c5 glib2 /
+# kmod-ipsec{,4,6} / 9 个 kmod-crypto-* / kmod-lib-zlib-{inflate,deflate}。
+# imm.config 里 CONFIG_PACKAGE_strongswan 本来就是 not set，固件里能有这套
+# 全靠这一行；删了它整组不进固件，不必动 config。
+# 若 glib2 / libjson-c5 / kmod-lib-zlib-* 确实被别的包依赖，opkg 解析时会自己拉，
+# 不写在这儿也进得去 —— 这也是删整行而不逐个剔除的原因。
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-taskplan luci-i18n-taskplan-zh-cn"
 
@@ -76,17 +119,32 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-i18n-daed-zh-cn"
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-proto-wireguard kmod-wireguard wireguard-tools"
 
-CUSTOM_PACKAGES="$CUSTOM_PACKAGES lucky luci-app-lucky yq kmod-dummy ca-bundle"
+# 【2026-11-02】lucky 移除（用户定：只去纯重复的，一个功能留一个）。
+# lucky 是全能型（DDNS + 反向代理 + 端口转发 + Web 服务 + SSL 证书），
+# 每一项在固件里都已有专用工具：DDNS → ddns-go，证书 → acme，穿透 → 其它。
+# 25.12 真机实测 /etc/lucky 是空目录、enabled '0'，装了从未配置。
+# 注意本行还有 yq / kmod-dummy / ca-bundle 三个通用件，只摘掉 lucky 两个包。
+CUSTOM_PACKAGES="$CUSTOM_PACKAGES yq kmod-dummy ca-bundle"
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES miniupnpd-nftables luci-app-upnp luci-i18n-upnp-zh-cn"
 
-CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-mosdns luci-i18n-mosdns-zh-cn v2ray-geoip v2ray-geosite"
+# 【2026-11-02】mosdns 移除（用户定：DNS 只留 smartdns + adblock 这条链）。
+# DNS 层已有两层：smartdns 做加速/分流/缓存，adblock 生成广告黑名单喂给它
+# （adblock 的 adb_dns 可设 smartdns，smartdns 的 conf_files 指向 adb 规则）。
+# 再加 mosdns 是第三个分流器，默认 5335 且 redirect 会抢 53，与 smartdns 冲突。
+# v2ray-geoip / v2ray-geosite 保留 —— 这两个是通用 geo 数据，geoview 与
+# daed 都要用，不跟 mosdns 绑定。
+# _PA_MOSDNS 保护组保留不动（新固件不带 P:mosdns，_pa_should 自动跳过）。
+CUSTOM_PACKAGES="$CUSTOM_PACKAGES v2ray-geoip v2ray-geosite"
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES msmtp luci-app-email luci-i18n-email-zh-cn"
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES nfs-kernel-server nfs-utils kmod-fs-nfs kmod-fs-nfsd luci-app-nfs luci-i18n-nfs-zh-cn"
 
-CUSTOM_PACKAGES="$CUSTOM_PACKAGES ngrokc luci-app-ngrokc luci-i18n-ngrokc-zh-cn"
+# 【2026-11-02】ngrokc 整组移除（用户定）。ngrok 反向隧道与 cloudflared 同一场景，
+# 但 cloudflared 不需要公网 IP、自带证书、免费不限速，ngrokc 免费版随机域名+限速。
+# 当日实测 ngrokc 服务在跑但唯一隧道 option enabled '0'，纯空转。
+# 整行删掉即不进固件；imm.config 第 5354 / 6483 行本就是 not set。
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES nps luci-app-nps luci-i18n-nps-zh-cn"
 
@@ -102,6 +160,8 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES tailscale luci-app-tailscale-community luci-i1
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES uhttpd luci-app-uhttpd luci-i18n-uhttpd-zh-cn"
 
-CUSTOM_PACKAGES="$CUSTOM_PACKAGES xfrpc luci-app-xfrpc luci-i18n-xfrpc-zh-cn"
+# 【2026-11-02】xfrpc 整组移除（用户定）。frp 客户端必须自己有公网 VPS，
+# 与 nps/npc 同类（都属「自建中转」），二选一留 nps（带 Web 管理面板 + SOCKS5）。
+# 整行删掉即不进固件；imm.config 第 5462 / 6527 行本就是 not set。
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES xz tar liblzma gnupg getopt cgroup-tools ip-full kmod-ikconfig kmod-veth kmod-br-netfilter"

@@ -131,6 +131,18 @@ _PA_MOSDNS="mosdns luci-app-mosdns luci-i18n-mosdns-zh-cn"
 # sing-box 是通用代理内核，原挂在 ssrp 组里，现在单独一组。
 # 它的 kmod 依赖（inet-diag / netlink-diag / tun）同样归 --deps 管。
 _PA_COMMON="sing-box"
+# 【2026-11-02】adblock 组（用户当日定：先留着，并且保护起来）。
+# 三个包是一条依赖链，只写 i18n 也会把 adblock 本体拉进来，所以整链一起护。
+#
+# 本组能判两层：
+#   ① 包被 opkg remove → _pa_should 命中出厂 P:adblock → 缺失 → 从包库装回；
+#   ② 包在、文件被删   → _pa_files_ok 判 /etc/init.d/adblock 与 /usr/bin/adblock.sh。
+#
+# 刻意不把 adblock 三包加进 pkg-restore.sh 的 --deps 文件级通道：
+# 那边是整份 .list 逐路径从 /rom 拷回，会把 /etc/adblock/adblock.allowlist、
+# blocklist、custom.feeds 这些用户自己加的规则按出厂空白版覆盖掉 ——
+# 与 /etc/config 全目录排除是同一条理由（保护动作制造它要防的故障）。
+_PA_ADBLOCK="adblock luci-app-adblock luci-i18n-adblock-zh-cn"
 
 # 【v.180.167】daed 的 geo 数据是软链接，真实文件由 v2ray-geoip / v2ray-geosite 提供：
 #   /usr/share/daed/geoip.dat    -> ../v2ray/geoip.dat
@@ -151,7 +163,7 @@ _PA_COMMON="sing-box"
 _PA_LINK_DAED_GEOIP=/usr/share/daed/geoip.dat
 _PA_LINK_DAED_GEOSITE=/usr/share/daed/geosite.dat
 
-_PA_LIST="${CS_PROBE_APPS:-$_PA_CLASHOO $_PA_DAED $_PA_MOSDNS $_PA_COMMON}"
+_PA_LIST="${CS_PROBE_APPS:-$_PA_CLASHOO $_PA_DAED $_PA_MOSDNS $_PA_COMMON $_PA_ADBLOCK}"
 
 log() { printf '[APP] %s\n' "$*"; }
 

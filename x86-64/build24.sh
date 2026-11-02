@@ -478,7 +478,8 @@ dae dae-geoip dae-geosite luci-app-dae luci-i18n-dae-zh-cn
 crowdsec crowdsec-firewall-bouncer luci-app-crowdsec-firewall-bouncer
 luci-i18n-crowdsec-firewall-bouncer-zh-cn nftables-json
 sing-box microsocks dns2socks ipt2socks chinadns-ng tcping
-clashoo luci-app-clashoo luci-i18n-clashoo-zh-cn"
+clashoo luci-app-clashoo luci-i18n-clashoo-zh-cn
+adblock luci-app-adblock luci-i18n-adblock-zh-cn"
 
 # --- 来源 A：容器里已经存在的 ipk ---
 # 构建本来就要把用到的包取到本地，能捞到就别再下载一遍（省流量也省时间）。
