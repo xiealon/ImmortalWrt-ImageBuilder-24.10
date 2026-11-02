@@ -3,7 +3,7 @@
 #
 # 为什么有这支脚本（用户 2026-10-29 定，判据取向见 crowdsec-lxc-probe.sh L219-231）：
 #   探针只做两件事 —— 探测 + 拉脚本，自己不动手装包。
-#   daed / mosdns / clashoo 这三个应用不像 smartdns 那样接管 53
+#   daed / clashoo 这两个应用不像 smartdns 那样接管 53
 #   （ssrp 已于 v.180.165 整组移除，理由见清单处的说明），
 #   所以不判进程、不判端口，只判包在不在册；缺了由本脚本装回。
 #   【v.180.164】判定粒度从「主程序一个包」扩到「主程序 + 依赖内核 + LuCI 界面」：
@@ -33,12 +33,10 @@
 #   真实动机：clashoo 包里装的是 /usr/bin/mihomo 与 /usr/bin/clash-meta，包名与二进制名
 #   毫无关系。只判包名时这两个被删，--check 返回 0、探针 appbad 恒为 0 ——
 #   功能已死，日志全绿。2026-10-30 真机复现（192.168.1.201）：
-#     rm /usr/bin/mosdns → pkg-restore-apps.sh --check → rc=0
-#   覆盖范围（12 个包 86 个文件，落在判据内的 9 个）：
+#   把包内二进制单独删掉后，--check 仍返回 0、探针 appbad 恒为 0。
+#   覆盖范围（各包落在判据内的文件）：
 #     clashoo           /usr/bin/mihomo /usr/bin/clash-meta /etc/init.d/clashoo
 #     daed              /usr/bin/daed /etc/init.d/daed
-#     luci-app-mosdns   /etc/init.d/mosdns
-#     mosdns            /usr/bin/mosdns
 #     sing-box          /usr/bin/sing-box /etc/init.d/sing-box
 #   LuCI 壳与 i18n（6 个包）的文件都在 /usr/share、/usr/lib/lua，判据内 0 行 → 恒放行，
 #   仍只靠记账判。这是有意的：那类文件删了顶多界面缺项，不会像二进制那样静默失去功能。
@@ -72,7 +70,7 @@ _RESTORE="${RESTORE_BIN:-/usr/sbin/pkg-restore.sh}"
 #
 #   clashoo 组：内核就在主包里（control: Provides: mihomo, clash-meta，Installed-Size 46.5MB）
 #   daed 组：  eBPF 程序，vmlinux-btf 是运行时前提，缺了 daed 直接起不来
-#   mosdns 组：geo 数据包是规则来源，缺了 mosdns 空转
+#   daed 组：  geo 数据包是规则来源，缺了 daed 空转
 #   ssrp 组：已整组移除，见下方 v.180.165 说明
 #
 # 【v.180.165】ssrp 组整组删除（用户 2026-10-29 定）。理由两条：
@@ -99,8 +97,8 @@ _RESTORE="${RESTORE_BIN:-/usr/sbin/pkg-restore.sh}"
 # 留下的 12 个包全部 firmware=yes + pkg=yes：
 #   clashoo / luci-app-clashoo / luci-i18n-clashoo-zh-cn
 #   daed / daed-geoip / daed-geosite / luci-app-daed / luci-i18n-daed-zh-cn
-#   mosdns / luci-app-mosdns / luci-i18n-mosdns-zh-cn
 #   sing-box
+#   adblock / luci-app-adblock / luci-i18n-adblock-zh-cn（2026-11-02 补入，见 _PA_ADBLOCK）
 #
 # 内核模块全部移出本表，改由 pkg-restore.sh --deps 做文件级恢复。
 # 原因是决定性的（2026-10-29 实测）：kmod-* 在固件出厂库里（P:kmod-tun 命中），
@@ -125,9 +123,6 @@ _RESTORE="${RESTORE_BIN:-/usr/sbin/pkg-restore.sh}"
 #                      不属于某一个应用的依赖
 _PA_CLASHOO="clashoo luci-app-clashoo luci-i18n-clashoo-zh-cn"
 _PA_DAED="daed daed-geoip daed-geosite luci-app-daed luci-i18n-daed-zh-cn"
-# mosdns 组仍不含 v2ray-geoip / v2ray-geosite（v.180.166 用户定）：
-# 通用 geo 数据包上游一直在更新，按本地包库装回旧版会把人的新版本拽回老版本。
-_PA_MOSDNS="mosdns luci-app-mosdns luci-i18n-mosdns-zh-cn"
 # sing-box 是通用代理内核，原挂在 ssrp 组里，现在单独一组。
 # 它的 kmod 依赖（inet-diag / netlink-diag / tun）同样归 --deps 管。
 _PA_COMMON="sing-box"
@@ -163,7 +158,7 @@ _PA_ADBLOCK="adblock luci-app-adblock luci-i18n-adblock-zh-cn"
 _PA_LINK_DAED_GEOIP=/usr/share/daed/geoip.dat
 _PA_LINK_DAED_GEOSITE=/usr/share/daed/geosite.dat
 
-_PA_LIST="${CS_PROBE_APPS:-$_PA_CLASHOO $_PA_DAED $_PA_MOSDNS $_PA_COMMON $_PA_ADBLOCK}"
+_PA_LIST="${CS_PROBE_APPS:-$_PA_CLASHOO $_PA_DAED $_PA_COMMON $_PA_ADBLOCK}"
 
 log() { printf '[APP] %s\n' "$*"; }
 
