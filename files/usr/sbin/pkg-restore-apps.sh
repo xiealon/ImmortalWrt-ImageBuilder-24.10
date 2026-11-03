@@ -138,6 +138,22 @@ _PA_COMMON="sing-box"
 # blocklist、custom.feeds 这些用户自己加的规则按出厂空白版覆盖掉 ——
 # 与 /etc/config 全目录排除是同一条理由（保护动作制造它要防的故障）。
 _PA_ADBLOCK="adblock luci-app-adblock luci-i18n-adblock-zh-cn"
+# 【2026-11-03】geo 数据包单独成组（与 25.12 线对齐）：包级判据，只判包不判文件。
+#
+# 这一组负责的只是「包被人 opkg remove 掉」—— 装回时连文件带记账一起回来。
+# 「包还在、.dat 被删」是另一种故障，归 pkg-restore.sh 的 --deps 文件级通道，
+# 由探针 _kmods_watch 连续 N 轮缺失后自动从 /rom 拷回。两条合起来才叫
+# 「删了还能自己长回来」。
+#
+# 为什么不在这里判文件：_pa_files_ok 的 case 只认 /usr/bin /usr/sbin
+# /etc/init.d /lib/*.so*，而 geo 两包的文件全在 /usr/share/v2ray。
+# 所以这一组天然只判「包在册」，不会因为 .dat 新旧去动任何字节 ——
+# 用户换新数据后，这里永远判在位。
+#
+# 装得回来的前提已核实：build24.sh 的 _PC_WANT 里已有
+# v2ray-geoip / v2ray-geosite，包库 /rom/root/pkg-cache 里就有对应 ipk，
+# 判出缺失能装回，不是空头支票。
+_PA_GEO="v2ray-geoip v2ray-geosite"
 
 # 【v.180.167】daed 的 geo 数据是软链接，真实文件由 v2ray-geoip / v2ray-geosite 提供：
 #   /usr/share/daed/geoip.dat    -> ../v2ray/geoip.dat
@@ -158,7 +174,7 @@ _PA_ADBLOCK="adblock luci-app-adblock luci-i18n-adblock-zh-cn"
 _PA_LINK_DAED_GEOIP=/usr/share/daed/geoip.dat
 _PA_LINK_DAED_GEOSITE=/usr/share/daed/geosite.dat
 
-_PA_LIST="${CS_PROBE_APPS:-$_PA_CLASHOO $_PA_DAED $_PA_COMMON $_PA_ADBLOCK}"
+_PA_LIST="${CS_PROBE_APPS:-$_PA_CLASHOO $_PA_DAED $_PA_COMMON $_PA_GEO $_PA_ADBLOCK}"
 
 log() { printf '[APP] %s\n' "$*"; }
 
