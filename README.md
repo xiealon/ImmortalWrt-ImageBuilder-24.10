@@ -20,7 +20,7 @@ ImmortalWrt **24.10.x** x86-64 固件构建线：官方 ImageBuilder 直接出�
 | honk 组 apk | 无 | 无 | **5 个，构建时从 `honk-apk` Release 取** |
 | `sha256/` 目录 | 无 | 无 | **有** |
 | CrowdSec LXC / rootfs-skel / 网络校验 | 有 | 有 | 有 |
-| 版本日志 | README 2,773 行 | 不重复，见 25.12 | 不重复，见 25.12 |
+| 版本日志 | README 572 行 + CHANGELOG 2,259 行 | 不重复，见 25.12 | 不重复，见 25.12 |
 
 **完整的 CrowdSec LXC、网络与防火墙校验、`rootfs-skel` 契约 → [25.12 README](https://github.com/xiealon/ImmortalWrt-ImageBuilder-25.12/blob/master/README.md)；v.103 起的改动记录 → [CHANGELOG](https://github.com/xiealon/ImmortalWrt-ImageBuilder-25.12/blob/master/CHANGELOG.md)**
 
