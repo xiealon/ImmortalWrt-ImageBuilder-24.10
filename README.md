@@ -45,9 +45,9 @@ ImmortalWrt **24.10.x** x86-64 固件构建线：官方 ImageBuilder 直接出�
 | 构建脚本 | `x86-64/build25.sh` | `x86-64/build24.sh` 47,780 B |
 | 自定义包清单 | `shell/apk-custom-packages.sh` | `shell/custom-packages.sh` 11,263 B |
 | CrowdSec LXC / rootfs-skel / 网络校验 | 有 | **完全相同，未改动** |
-| 版本日志 | README 约 2,700 行 | **不重复，见 25.12** |
+| 版本日志 | README 2,773 行 | **不重复，见 25.12** |
 
-两边 README 的正文曾**只差 10 处**（4 张图 + 3 处 `build24.sh`→`build25.sh` + 2 处 workflow 名 + 1 处 `custom-packages` 措辞），所以详版只维护在 25.12 一份。
+两边 README 的正文曾**只差 8 处**（`git diff`：8 insertions / 18 deletions —— 4 张图 + 版本号与文件名），所以详版只维护在 25.12 一份。
 
 `docs/` 只留 6 个 `gen_*.py`，图不再入库。要图就跑脚本重出，PNG 与 SVG 都能生成。
 
