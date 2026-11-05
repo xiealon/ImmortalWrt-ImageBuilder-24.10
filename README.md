@@ -2,40 +2,11 @@
 
 ImmortalWrt **24.10.x** x86-64 固件构建线：官方 ImageBuilder 直接出固件，带 CrowdSec LXC。
 
-**这条线不是主线。** 完整文档、新功能、honk 都在 25.12 线上，本 README 只讲 24.10 与它的差异。
-
-**→ 完整文档在 [xiealon/ImmortalWrt-ImageBuilder-25.12](https://github.com/xiealon/ImmortalWrt-ImageBuilder-25.12)**
-
----
-
-## 这个仓库是什么
-
-给 x86-64 软路由出一份带 CrowdSec LXC 的 ImmortalWrt 固件。固件内容由三样东西决定：
-
-- 官方 ImageBuilder 镜像 `immortalwrt/imagebuilder:x86-64-openwrt-24.10.x`
-- `x86-64/imm.config` 里勾选的包
-- `x86-64/build24.sh` 里写的后处理
-
-三样都与 25.12 线**结构相同、内容不同**。没有自建 IB 包，没有自建 apk 全集，没有内核 hash 约束。
-
----
-
-## 三条线的关系
-
-| 仓库 | 版本线 | ImageBuilder | 内核 | 用途 |
-|---|---|---|---|---|
-| **`-24.10`**（本仓库） | 24.10.0 ~ 24.10.6 | 官方 docker 镜像 | 官方 | 老版本线，维护用 |
-| `-25.12` | 25.12.2 | 官方 docker 镜像 | 官方 | **主线** |
-| `-25.12-honk` | 25.12.2 | 自建 IB 包 | 自建，ftrace + BTF 全开 | **跑 honk** |
-
-要装 honk → `-25.12-honk`。要用最新主线 → `-25.12`。本仓库只在你明确要留在 24.10 内核线时才有意义。
-
----
-
 ## 三条线的差异
 
 | | 25.12 | 24.10 | 25.12-honk |
 |---|---|---|---|
+| 用途 | **主线** | 老版本线，维护用 | **跑 honk** |
 | workflow | 27,449 B / 485 行 | 27,853 B / 494 行 | **37,419 B / 641 行** |
 | `runs-on` | ubuntu-22.04 | ubuntu-22.04 | **ubuntu-24.04** |
 | ImageBuilder | 官方 docker，tag 跟下拉（25.12.0 / 25.12.1） | 官方 docker，tag 跟下拉（24.10.0 ~ 24.10.6） | **自建 IB 包**，`v25.12.2-ib-x86-64-r2` |
@@ -51,9 +22,21 @@ ImmortalWrt **24.10.x** x86-64 固件构建线：官方 ImageBuilder 直接出�
 | CrowdSec LXC / rootfs-skel / 网络校验 | 有 | 有 | 有 |
 | 版本日志 | README 2,773 行 | 不重复，见 25.12 | 不重复，见 25.12 |
 
-两边 README 的正文曾**只差 8 处**（`git diff`：8 insertions / 18 deletions —— 4 张图 + 版本号与文件名），所以详版只维护在 25.12 一份。
+**完整的 CrowdSec LXC、网络与防火墙校验、`rootfs-skel` 契约、版本日志 → [xiealon/ImmortalWrt-ImageBuilder-25.12](https://github.com/xiealon/ImmortalWrt-ImageBuilder-25.12/blob/master/README.md)**
 
-`docs/` 只留 6 个 `gen_*.py`，图不再入库。要图就跑脚本重出，PNG 与 SVG 都能生成。
+---
+
+## 这个仓库是什么
+
+给 x86-64 软路由出一份带 CrowdSec LXC 的 ImmortalWrt 固件。固件内容由三样东西决定：
+
+- 官方 ImageBuilder 镜像 `immortalwrt/imagebuilder:x86-64-openwrt-24.10.x`
+- `x86-64/imm.config` 里勾选的包
+- `x86-64/build24.sh` 里写的后处理
+
+三样都与 25.12 线**结构相同、内容不同**。没有自建 IB 包，没有自建 apk 全集，没有内核 hash 约束。
+
+本仓库只在你明确要留在 24.10 内核线时才有意义。第三方插件清单见 [PACKAGES.md](PACKAGES.md)，支持的机型见 [SUPPORT.md](SUPPORT.md)。
 
 ---
 
@@ -103,20 +86,6 @@ Profile 按**硬盘标称容量**选，rootfs 已扣掉标称换算损耗（10^9
 
 1. **`build24.sh` 与 `build25.sh` 不是同一份文件，但逻辑要同步**。CrowdSec 后处理改一边时，回看另一条线是否也该改；改完两边都要能跑。
 2. **这里的 `=y` 只表示装进固件**（`CONFIG_PACKAGE_*=y`），和 25.12 线同义。它不改 ImageBuilder 自带的官方内核。
-
----
-
-## 不在本 README 里的内容
-
-CrowdSec LXC 的整套运行期逻辑、网络与防火墙的逐条校验、`rootfs-skel` 契约、以及 v.103 起的完整版本日志，都写在 25.12 仓库：
-
-**[xiealon/ImmortalWrt-ImageBuilder-25.12 → README.md](https://github.com/xiealon/ImmortalWrt-ImageBuilder-25.12/blob/master/README.md)**
-
-那部分是两条线的共同基础，没必要抄第二遍。
-
-honk 的内核要求（ftrace 五项 + BTF）、自建 IB 包、apk 全集见 [25.12-honk](https://github.com/xiealon/ImmortalWrt-ImageBuilder-25.12-honk)。
-
-第三方插件清单见 [PACKAGES.md](PACKAGES.md)，支持的机型见 [SUPPORT.md](SUPPORT.md)。
 
 ---
 
