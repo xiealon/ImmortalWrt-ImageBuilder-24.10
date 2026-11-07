@@ -1,5 +1,5 @@
 #!/bin/sh
-# 【2026-10-31.1345】固件版本标记 —— 与 crowdsec-lxc-bootstrap.sh 的 SCRIPT_VER 同步，每次改脚本一起改
+# 【2026-11-07.2245】固件版本标记 —— 与 crowdsec-lxc-bootstrap.sh 的 SCRIPT_VER 同步，每次改脚本一起改
 # crowdsec-lxc-probe：运行期 last_pull 监视探针（v.106）
 # 职责边界（刻意收窄成一条）：
 #   只验证 last_pull。判停滞 → 告警 + 持引导锁重跑 crowdsec-lxc-bootstrap.sh。
@@ -91,7 +91,7 @@ PROBE_GUARD_MAX="${CS_PROBE_GUARD_MAX:-60}"
 #        /etc/init.d/crowdsec-lxc-probe
 # 只有 crowdsec-lxc-bootstrap.sh 的那一份参与 CFG_SHA_FILE 指纹判定；
 # 这里这份纯标记，改它不会触发任何重写。
-SCRIPT_VER="2026-10-31.1345"
+SCRIPT_VER="2026-11-07.2245"
 
 plog() { logger -t crowdsec-probe "$*"; }
 
@@ -232,7 +232,7 @@ _up_n() {
 #   · smartdns 两条一起判（v.180.198）：
 #     ① 服务生效 —— pkg-restore-smartdns.sh --check（pidof + 53 归属反查）；
 #     ② 上游条数 —— uci show smartdns | grep -c '=server$'，0 条才算失效。
-#     任一不满足就调 pkg-restore-smartdns.sh --config 重写主段与 13 条上游。
+#     任一不满足就调 pkg-restore-smartdns.sh --config 重写主段与 6 条上游。
 #     判据只留在脚本与这块注释各一处，探针不重复实现（见上方「两条判据」那段）。
 #   · 其余应用（daed / ssrp / mosdns / clashoo）只判包在不在册，
 #     不搞进程/端口 —— 它们不像 smartdns 那样接管 53，端口多维度没有意义。
@@ -249,7 +249,7 @@ _up_n() {
 # 2026-10-28 那次事故的根因是 /etc/smartdns 下 5 个规则文件被遮掉，当时探针自己补文件、
 # 自己重启，救回来了。但那套逻辑与脚本的 _sd_conf 是同一份清单、两处实现（清单在两边
 # 各硬写一遍），将来加文件漏一处就会出现「探针认为齐了、脚本认为缺着」。
-# 现在统一走 --repair：它内部第一步就是 _sd_conf 补文件，再重写主段与 13 条上游、
+# 现在统一走 --repair：它内部第一步就是 _sd_conf 补文件，再重写主段与 6 条上游、
 # commit 并重启。代价从「补文件后约 2 秒」变成「完整流程约 15 秒」，但只在
 # 连续 N 轮不可用且冷却闸门通过之后触发，不会每分钟来一次。
 _SD_RESTORE="${CS_PROBE_SD_RESTORE:-/usr/sbin/pkg-restore-smartdns.sh}"
@@ -363,7 +363,7 @@ _up_watch() {
     if [ -z "$_uw_why" ]; then
         # 【2026-10-31.1130】P_UP_BAD 在下面的 --config 之前就被清零了，所以「修好之后
         # 的那一轮」它恒为 0 —— 原来的判据让这行恢复日志永远打不出来。
-        # 2026-10-31 真机实测：删光 13 条上游 → 3 轮后 --config 写回 → 日志里只有
+        # 2026-10-31 真机实测：删光 6 条上游 → 3 轮后 --config 写回 → 日志里只有
         #「已写回：下一轮复核」，没有「已恢复」，等于修好了没人知道。
         # 补一个只活在内存里的 P_UP_OK：修复时置 1，下一轮判好时消费掉。
         if [ "${P_UP_BAD:-0}" -gt 0 ] || [ "${P_UP_OK:-0}" = "1" ]; then
@@ -374,7 +374,7 @@ _up_watch() {
         P_UP_OK=0
         # 【2026-10-31.1130】锁存必须在这里解除。原来只清 bad/fix，uphold 一直留在
         # 状态文件里 —— 现场修好之后下一次故障会直接进 up-need-human-hold，连 warn
-        # 都不打，自愈等于被永久关掉。2026-10-31 真机实测到这个：修好 13 条上游后
+        # 都不打，自愈等于被永久关掉。2026-10-31 真机实测到这个：修好 6 条上游后
         # uphold 仍为 1，再删一次上游第一轮就 hold。其他四个通道（app/kmod/lxc/pull）
         # 判好分支都有清零，只有这条漏了。
         P_HUMAN_UP=0
@@ -406,10 +406,10 @@ _up_watch() {
     #   软故障（只有规则文件缺、53 正常）→ --conf：只 cp 文件回 /etc/smartdns，
     #     不碰 uci、不 commit、不 restart，全程零中断；
     #   硬故障（53 未接管 / 二进制缺失 / 上游 0 条）→ --config：装包 + 重写主段 +
-    #     13 条上游 + commit + 重启 smartdns（约 15 秒中断），所以必须放在冷却闸门之后。
+    #     6 条上游 + commit + 重启 smartdns（约 15 秒中断），所以必须放在冷却闸门之后。
     # 原先不管哪种坏法都重启一次，等于「删了个 conf 文件」也要掉 15 秒 DNS。
     _uw_cmd="--config"
-    _uw_desc="重写配置与 13 条上游（会重启 smartdns）"
+    _uw_desc="重写配置与 6 条上游（会重启 smartdns）"
     if [ "$_uw_mode" = "conf" ]; then
         _uw_cmd="--conf"
         _uw_desc="只补规则文件（不重启，不掉 DNS）"
