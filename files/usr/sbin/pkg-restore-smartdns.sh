@@ -354,9 +354,11 @@ _sd_cfg_main() {
 # 事务性：删除只落在 uci 暂存目录（/tmp/.uci），后面任何一步失败都会 _sd_discard
 # revert，不会真的把表删成空的；只有 commit 成功才算落地。
 #
-# 删除必须逐个来：匿名段删掉 @server[0] 之后，后面的段会整体前移一格，拿预先展开
-# 的列表批量删会删错段或漏段。所以每轮重新取「当前第一条」，直到一条不剩
-# （50 轮上限兜底，delete 失败立刻退出，不死循环）。
+# 删除从后往前：@server[-1] 每轮都指向当前最后一个，删它不动前面任何段的索引，
+# 删到没有该类型段就自然失败退出（8 段 = 8 次 delete，不起 show/sed/head）。
+# 不能「预先展开列表再逐个删」—— 删掉 @server[0] 之后其余整体前移一格，8 段
+# 那样只会删掉 4 段、留下原 1/3/5/7，而末尾 -eq 6 只数表内行、照样通过。
+# 50 轮上限兜底，delete 失败立刻退出，不死循环。
 _sd_cfg_upstream() {
     # 守门①：uci 读不出来就什么都别做。否则下面「一条都没取到」会被当成
     # 「本来就没有旧段」，接着 add 6 条 —— 结果是 6 条新的叠在 N 条旧的上，
@@ -368,10 +370,7 @@ _sd_cfg_upstream() {
     _sdc_g=0
     while [ "$_sdc_g" -lt 50 ]; do
         _sdc_g=$((_sdc_g + 1))
-        _sdc_s=$(uci -q show smartdns 2>/dev/null \
-            | sed -n 's/^smartdns\.\([^.=]*\)=server$/\1/p' | head -n1)
-        [ -n "$_sdc_s" ] || break
-        uci -q delete "smartdns.$_sdc_s" 2>/dev/null || break
+        uci -q delete "smartdns.@server[-1]" 2>/dev/null || break
     done
     # 守门②：清完必须真的一条不剩。delete 失败或撞上 50 轮上限都会提前 break，
     # 那时继续 add 就是「新的叠旧的」。这里复核一次，不干净就整条路径作废。
