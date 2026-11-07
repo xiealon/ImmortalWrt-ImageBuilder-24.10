@@ -16,7 +16,7 @@
 #      纯前端包，无二进制、无 init。只调单包恢复、不递归 —— 它的 Depends 里有
 #      luci-base，递归会一路碰 rpcd / ubus / ucode 一大片基础系统，那是砸系统。
 #
-#   ③ uci 配置（主段 + 13 条写死上游）
+#   ③ uci 配置（主段 + 6 条写死上游）
 #      2026-10-29 起从 bootstrap 整段搬来。bootstrap 只保留六件事：网络配置（含防火墙）、
 #      网桥配置、容器网络配置、lxc 与 bouncer 恢复、crowdsec 容器恢复、
 #      crowdsec 与 bouncer 的本地联动配置。smartdns 归本脚本 + 探针。
@@ -35,7 +35,7 @@
 #   pkg-restore-smartdns.sh --pkg        只装本体（含依赖树）
 #   pkg-restore-smartdns.sh --conf       只补 /etc/smartdns/ 规则文件
 #   pkg-restore-smartdns.sh --luci       只补界面
-#   pkg-restore-smartdns.sh --config     写 uci 配置（主段 + 13 条写死上游）并 commit/重启 smartdns
+#   pkg-restore-smartdns.sh --config     写 uci 配置（主段 + 7 条写死上游）并 commit/重启 smartdns
 #                                        （dnsmasq 让位由 smartdns 的 init 自动完成，本脚本不碰 dhcp）
 #   pkg-restore-smartdns.sh --repair     整体自愈：装包 + 规则文件 + 配置 + 重启（探针用）
 #   pkg-restore-smartdns.sh --localrule  只补 /etc/smartdns/custom.conf 的 localhost 行
@@ -68,6 +68,10 @@ fi
 log() { printf '[PKG] %s\n' "$*"; }
 
 # /etc/smartdns/ 下必须存在的规则文件（与构建期固化进固件的那批一致）
+# 已淘汰的旧上游（2026-11-07 起 Cn 组转 DoT）。这几个 IP 在真机上实测 TCP 853
+# 不通或解析失败，留着只会拖慢并发查询（超时后才用上其他节点）。
+SD_RETIRED_IPS="180.76.76.76 101.226.4.6 218.30.118.6 123.125.81.6 140.207.198.6 1.2.4.8 119.29.29.29 8.8.4.4 1.1.1.1 1.0.0.1"
+
 SD_CONF_FILES="address.conf blacklist-ip.conf custom.conf domain-block.list domain-forwarding.list"
 
 # 【2026-11-07】localhost 本地解析 —— adblock 探活的活路
@@ -246,8 +250,8 @@ _sd_luci() {
 # lxc 与 bouncer 恢复 / crowdsec 容器恢复 / crowdsec 与 bouncer 联动配置」六件事。
 # smartdns 的包、配置、服务全部由本脚本 + 探针负责，bootstrap 不再参与。
 #
-# 配置口径：验证 smartdns 存在之后**即写入**，不做逐项比对 —— 上游表写死 13 条
-# （国内 9 UDP / 境外 4 DoT，用户明确说「完全够用」）。覆盖式写入的副作用是
+# 配置口径：验证 smartdns 存在之后**即写入**，不做逐项比对 —— 上游表写死 6 条
+# （国内 3 DoT / 境外 3，用户明确说「完全够用」）。覆盖式写入的副作用是
 # 在 LuCI 里手改的上游会被下一轮冲掉；这与原 bootstrap 的
 # build_smartdns_upstream 行为完全一致，不是退步。
 #
@@ -316,16 +320,29 @@ _sd_cfg_main() {
     return 0
 }
 
-# 上游 13 条写死。按 ip 定位段：有就修正字段，没有就新建；同 ip 重复段只留第一个。
+# 上游 7 条写死（Cn 3 条 DoT + Out 4 条 DoT）。按 ip 定位段：有就修正字段，没有就新建；
+# 同 ip 重复段只留第一个。
 # 表外用户自己加的上游原样保留（不删除）。
 _sd_cfg_upstream() {
-    # 先建「ip=段名」索引，避免每条都重扫一遍 uci show（13 条 × 13 段 = 169 次 fork）
+    # 先建「ip=段名」索引，避免每条都重扫一遍 uci show（6 条 × 6 段 = 36 次 fork）
     _sdc_map=" "
     for _sdc_s in $(uci -q show smartdns 2>/dev/null | grep -E '=server$' | cut -d. -f2 | cut -d= -f1); do
         _sdc_map="$_sdc_map$(uci -q get "smartdns.$_sdc_s.ip" 2>/dev/null)=$_sdc_s "
     done
+    # 【2026-11-07】淘汰的旧上游：Cn 组统一走 DoT 后，这些 UDP 节点全部下线。
+    # 只删这几个写死的 IP —— 表外用户自己加的上游仍然不动。
+    for _sdc_rip in $SD_RETIRED_IPS; do
+        for _sdc_p in $_sdc_map; do
+            [ "${_sdc_p%%=*}" = "$_sdc_rip" ] || continue
+            uci -q delete "smartdns.${_sdc_p#*=}" 2>/dev/null
+            _sdc_map=$(printf '%s' "$_sdc_map" | sed "s| $_sdc_rip=[^ ]*| |")
+        done
+    done
     _sdc_n=0
     while read -r _sdc_name _sdc_ip _sdc_tp _sdc_grp _sdc_host; do
+        # 表里带 # 注释行，必须跳过 —— 否则注释会被当成一条上游写进 uci，
+        # 条数校验直接炸（真机踩过：4 行注释让 7 条变 11 条）。
+        case "$_sdc_name" in ''|'#'*) continue ;; esac
         [ -n "$_sdc_ip" ] || continue
         _sdc_hit=""
         _sdc_dup=""
@@ -349,8 +366,10 @@ _sd_cfg_upstream() {
         uci -q set "smartdns.$_sdc_hit.ip=$_sdc_ip"
         uci -q set "smartdns.$_sdc_hit.type=$_sdc_tp"
         uci -q set "smartdns.$_sdc_hit.server_group=$_sdc_grp"
-        # DoT 必须带 SNI，否则证书主机名校验必然失败（8.8.8.8 的证书是 dns.google）
-        if [ "$_sdc_tp" = "tls" ] && [ "$_sdc_host" != "-" ]; then
+        # DoT / DoH 都要带 SNI：DoT 只写 IP，不设 SNI 必然校验失败（8.8.8.8 的证书是
+        # dns.google）；DoH 的 URL 里虽然含域名，显式设上更稳妥 —— 不设虽然也能通，
+        # 但那是靠实现去猜，不该依赖。
+        if { [ "$_sdc_tp" = "tls" ] || [ "$_sdc_tp" = "https" ]; } && [ "$_sdc_host" != "-" ]; then
             uci -q set "smartdns.$_sdc_hit.host_name=$_sdc_host"
         else
             # UDP 段不该带 SNI：历史残留清掉，否则每轮都会判不符
@@ -358,21 +377,21 @@ _sd_cfg_upstream() {
         fi
         _sdc_n=$((_sdc_n + 1))
     done <<'SD_UPSTREAM_EOF'
-alidns 223.5.5.5 udp Cn -
-alidns 223.6.6.6 udp Cn -
-dnspod 119.29.29.29 udp Cn -
-baidu 180.76.76.76 udp Cn -
-360dns 101.226.4.6 udp Cn -
-360dns 218.30.118.6 udp Cn -
-360dns 123.125.81.6 udp Cn -
-360dns 140.207.198.6 udp Cn -
-cnnic 1.2.4.8 udp Cn -
+# 【2026-11-07】Cn 组改 DoT：实测本链路 TCP 53 被干扰（阿里/腾讯连上即 RST、
+# 百度 SYN 无回应），而 853 端口可达且解析正常（91 B，与 UDP 同长）。
+# 只有这 3 条实测可用：阿里 2 条、腾讯 1 条（dot.pub → 120.53.53.53）。
+# 百度 / 360 / CNNIC 的 853 不通或解析失败，全部淘汰，见 SD_RETIRED_IPS。
+alidns 223.5.5.5 tls Cn dns.alidns.com
+alidns 223.6.6.6 tls Cn dns.alidns.com
+dnspod 120.53.53.53 tls Cn dot.pub
 google 8.8.8.8 tls Out dns.google
-google 8.8.4.4 tls Out dns.google
-cloudflare 1.1.1.1 tls Out cloudflare-dns.com
-cloudflare 1.0.0.1 tls Out cloudflare-dns.com
+# Out 组：honk 开着时才可达（实测 8.8.8.8 的 853/443、dns.google 的 DoH、
+# cloudflare 的 DoH 都能真解析出 91 B；cloudflare 的 853 与 1.1.1.1 的 DoT 均为 0 B）。
+# DoH 必须写域名，用 IP 形式（https://8.8.8.8/dns-query）实测 0 B 失败。
+google https://dns.google/dns-query https Out dns.google
+cloudflare https://cloudflare-dns.com/dns-query https Out cloudflare-dns.com
 SD_UPSTREAM_EOF
-    [ "$_sdc_n" -eq 13 ] || { log "上游按表处理条数异常（$_sdc_n ≠ 13），不接管 DNS"; return 1; }
+    [ "$_sdc_n" -eq 6 ] || { log "上游按表处理条数异常（$_sdc_n ≠ 6），不接管 DNS"; return 1; }
     return 0
 }
 
@@ -422,7 +441,7 @@ _sd_config() {
     _sd_cfg_main || { log "主配置段写入失败"; _sd_discard; return 1; }
     _sd_cfg_upstream || { log "上游表写入失败，不接管 DNS"; _sd_discard; return 1; }
     _sd_apply || return 1
-    log "smartdns 已接管 DNS：13 条上游（国内 9 UDP / 境外 4 DoT），dnsmasq 由 init 让出 53"
+    log "smartdns 已接管 DNS：6 条上游（国内 3 DoT / 境外 2 DoH+1 DoT），dnsmasq 由 init 让出 53"
     log "localhost 本地解析在位：adblock 的 nslookup localhost. 探活可通过"
     return 0
 }
