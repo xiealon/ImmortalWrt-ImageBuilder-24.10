@@ -51,8 +51,12 @@ ck "R35.1e 判据用整行精确匹配（grep -qxF）" \
    "$(code _sd_localrule_ok | grep -c 'grep -qxF')" "1"
 ck "R35.1f 判据没有用子串匹配（无 grep -qF 但不带 x）" \
    "$(code _sd_localrule_ok | grep -cE 'grep -qF|grep -q "')" "0"
-ck "R35.1g 判定函数只读（体内无写动作）" \
-   "$(code _sd_localrule_ok | grep -cE '^[[:space:]]*(uci |cp |mv |rm |mkdir |printf|echo )')" "0"
+ck "R35.1g 判定函数只写 stderr，不动文件" \
+   "$(code _sd_localrule_ok | grep -vE '>&2' | grep -cE '^[[:space:]]*(uci |cp |mv |rm |mkdir |printf|echo )')" "0"
+ck "R35.1h 文件缺失时给出 stderr 提示" \
+   "$(code _sd_localrule_ok | grep -c '缺文件：')" "1"
+ck "R35.1i 缺行时给出 stderr 提示" \
+   "$(code _sd_localrule_ok | grep -c '缺 localhost 本地解析')" "1"
 
 echo
 echo "== 35.2 接入四个入口 =="
