@@ -319,17 +319,16 @@ _sd_cfg_main() {
     # 大小写不同就是两个组 —— 组名对不上时 53 端口绑的组没有上游，解析全空。
     uci -q set "smartdns.$_sdc_seg.server_flags=-group CN" || return 1
     # 第二服务器 = 6553，只走 out 组、不缓存：给 honk 的 dae 在分流后使用。
-    # 六项显式写死 —— init 里 seconddns_enabled 的默认值是 0（第 564 行直接 return），
-    # 只写 port 不写 enabled，重刷后 6553 根本不监听，honk 的 out 上游会整组失效。
-    # 测速与缓存也关掉：这一组要给分流后的域名做真实解析，不能拿缓存糊弄。
+    # 只写四项骨头：开、端口、TCP、绑 out 组。init 里 seconddns_enabled 默认是 0
+    # （第 564 行直接 return），不写 enabled，重刷后 6553 根本不监听，honk 的 out
+    # 上游会整组失效；port / tcp_server / server_group 是这套转发的形状。
     uci -q set "smartdns.$_sdc_seg.seconddns_enabled=1" || return 1
     uci -q set "smartdns.$_sdc_seg.seconddns_port=6553" || return 1
     uci -q set "smartdns.$_sdc_seg.seconddns_tcp_server=1" || return 1
     uci -q set "smartdns.$_sdc_seg.seconddns_server_group=out" || return 1
-    uci -q set "smartdns.$_sdc_seg.seconddns_no_cache=1" || return 1
-    uci -q set "smartdns.$_sdc_seg.seconddns_no_speed_check=1" || return 1
-    # no_dualstack_selection / force_aaaa_soa 故意不写：用户 2026-11-07 定，这两项
-    # 交给 LuCI 自己点，保留下 IPv6 的余地。脚本写了就会被每轮覆盖掉，等于锁死。
+    # no_cache / no_speed_check / no_dualstack_selection / force_aaaa_soa 故意不写：
+    # 用户 2026-11-07 定，这四项交给 LuCI 自己点，以备不时之需。脚本一旦写了就会
+    # 每轮覆盖，等于把开关锁死。注意重刷固件后它们回到默认 0，需要手动再点一次。
     uci -q set "smartdns.$_sdc_seg.cache_size=32768" || return 1
     uci -q set "smartdns.$_sdc_seg.serve_expired=1" || return 1
     uci -q set "smartdns.$_sdc_seg.prefetch_domain=1" || return 1
