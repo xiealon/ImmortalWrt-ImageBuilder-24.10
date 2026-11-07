@@ -319,9 +319,18 @@ _sd_cfg_main() {
     # 大小写不同就是两个组 —— 组名对不上时 53 端口绑的组没有上游，解析全空。
     uci -q set "smartdns.$_sdc_seg.server_flags=-group CN" || return 1
     # 第二服务器 = 6553，只走 out 组、不缓存：给 honk 的 dae 在分流后使用。
+    # 八项全部显式写死 —— init 里 seconddns_enabled 的默认值是 0（第 564 行直接 return），
+    # 只写 port 不写 enabled，重刷后 6553 根本不监听，honk 的 out 上游会整组失效。
+    # 其余五项默认值也都是 0，漏写就会带上测速、双栈选择、缓存和 AAAA 记录，
+    # 与「给分流后的域名做真实解析、不走缓存」的用途相反。
+    uci -q set "smartdns.$_sdc_seg.seconddns_enabled=1" || return 1
     uci -q set "smartdns.$_sdc_seg.seconddns_port=6553" || return 1
-    uci -q set "smartdns.$_sdc_seg.seconddns_no_cache=1" || return 1
+    uci -q set "smartdns.$_sdc_seg.seconddns_tcp_server=1" || return 1
     uci -q set "smartdns.$_sdc_seg.seconddns_server_group=out" || return 1
+    uci -q set "smartdns.$_sdc_seg.seconddns_no_cache=1" || return 1
+    uci -q set "smartdns.$_sdc_seg.seconddns_no_speed_check=1" || return 1
+    uci -q set "smartdns.$_sdc_seg.seconddns_no_dualstack_selection=1" || return 1
+    uci -q set "smartdns.$_sdc_seg.seconddns_force_aaaa_soa=1" || return 1
     uci -q set "smartdns.$_sdc_seg.cache_size=32768" || return 1
     uci -q set "smartdns.$_sdc_seg.serve_expired=1" || return 1
     uci -q set "smartdns.$_sdc_seg.prefetch_domain=1" || return 1
