@@ -183,8 +183,15 @@ _sd_conf_ok() {
 # localhost 行是否已经在位。整行精确匹配（-x），不是子串 ——
 # 否则 address /localhost/127.0.0.2 这种也会被判成已配好。
 _sd_localrule_ok() {
-    [ -f "$PKGROOT/etc/smartdns/custom.conf" ] || return 1
-    grep -qxF "$_SD_LOCALRULE" "$PKGROOT/etc/smartdns/custom.conf" 2>/dev/null
+    if [ ! -f "$PKGROOT/etc/smartdns/custom.conf" ]; then
+        printf '[PKG] 缺文件：/etc/smartdns/custom.conf\n' >&2
+        return 1
+    fi
+    grep -qxF "$_SD_LOCALRULE" "$PKGROOT/etc/smartdns/custom.conf" 2>/dev/null && return 0
+    # 失败要说清缺什么：探针的 _up_svc 会把 --check 的输出转 syslog，
+    # 静默 return 1 的话日志里只剩一句笼统的「未就绪」。
+    printf '[PKG] 缺 localhost 本地解析：/etc/smartdns/custom.conf\n' >&2
+    return 1
 }
 
 # 追加该行。幂等：已在位直接返回 0，不重复追加。
