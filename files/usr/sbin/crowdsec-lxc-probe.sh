@@ -331,12 +331,20 @@ _up_watch() {
     _up_svc
     _uw_svc=$?
     # 【2026-11-02】--check 现在返三态，按「坏在哪一层」选修法（见脚本里的说明）：
-    #   0 = 好；1 = 服务没起来；3 = 服务正常、只有五个规则文件缺。
+    #   0 = 好；1 = 服务没起来；3 = 服务正常、只有五个规则文件缺；
+    #   4 = 服务正常、文件齐，只缺 /etc/smartdns/custom.conf 的 localhost 行。
     # 只有 3 能走零中断路径 —— 文件在内存里，进程和 socket 都没受影响，拷回去即可。
     # 其余（含任何非预期 rc）一律按硬故障走 --config，宁可多重启一次，不留半修状态。
     if [ "$_uw_svc" = "3" ]; then
         _uw_why="规则文件缺失（53 仍由 smartdns 接管）"
         _uw_mode="conf"
+    elif [ "$_uw_svc" = "4" ]; then
+        # 【2026-11-07】只缺 custom.conf 里那行 localhost 本地解析。
+        # 不能走 conf 模式 —— --conf 只追加一行、不重启 smartdns，规则不会载入；
+        # 必须走 --config（重写配置 + 重启），代价是十几秒 DNS 中断，
+        # 但缺着不修的后果是 adblock 每次 reload 白等 30 秒并打假失败。
+        _uw_why="localhost 本地解析缺失（53 仍由 smartdns 接管，改 custom.conf 需重启生效）"
+        _uw_mode="config"
     elif [ "$_uw_svc" != "0" ]; then
         _uw_why="smartdns 未就绪（53 未接管或二进制缺失，详见 crowdsec-probe-sd）"
         _uw_mode="config"
