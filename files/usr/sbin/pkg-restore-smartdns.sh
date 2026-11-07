@@ -38,10 +38,12 @@
 #   pkg-restore-smartdns.sh --config     写 uci 配置（主段 + 13 条写死上游）并 commit/重启 smartdns
 #                                        （dnsmasq 让位由 smartdns 的 init 自动完成，本脚本不碰 dhcp）
 #   pkg-restore-smartdns.sh --repair     整体自愈：装包 + 规则文件 + 配置 + 重启（探针用）
+#   pkg-restore-smartdns.sh --localrule  只补 /etc/smartdns/custom.conf 的 localhost 行
 #
 # 环境变量：ROMDIR（默认 /rom）、PKGROOT（默认空）、RESTORE_BIN（默认 pkg-restore.sh）
 #
 # 退出码：0 成功或本来就不缺 / 1 失败 / 2 用法错误
+# --check 另有三档：0 全好 / 3 规则文件缺 / 4 缺 localhost 本地解析
 
 set -u
 ROMDIR="${ROMDIR:-/rom}"
@@ -67,6 +69,24 @@ log() { printf '[PKG] %s\n' "$*"; }
 
 # /etc/smartdns/ 下必须存在的规则文件（与构建期固化进固件的那批一致）
 SD_CONF_FILES="address.conf blacklist-ip.conf custom.conf domain-block.list domain-forwarding.list"
+
+# 【2026-11-07】localhost 本地解析 —— adblock 探活的活路
+#
+# adblock 4.5.x 的 f_dnsup() 用 nslookup localhost. 判 DNS 后端是否起来
+# （adblock.sh 第 80 行 adb_lookupdomain="localhost"，硬编码）。smartdns 对
+# localhost 回 NXDOMAIN，nslookup 退出码 1，adblock 判失败：30 次轮询 × 1 秒
+# 后打 "dns backend restart with adblock blocklist failed"。列表其实照样生成
+# 并已被 conf-file 引入（blocked_domains 不为 0），功能没坏，只是每次 reload
+# 白等 30 秒 + 刷一条假错误。
+#
+# 落点为什么是 custom.conf 而不是 uci：
+#   2026-11-07 真机（H3C C100 / ImmortalWrt 25.12.2 / smartdns 48.4）实测，
+#   uci 里写 config domain-rule + domain/address 三段，/var/etc/smartdns/
+#   smartdns.conf 里一行都不会出现 —— 那是 init 不认的段类型，写了也白写。
+#   而 init 生成的 smartdns.conf 里有 `conf-file /etc/smartdns/custom.conf`，
+#   往该文件追加一行 address /localhost/127.0.0.1 后 nslookup rc=0。
+# 所以判据是 custom.conf 里的整行文本，不碰 uci 的 domain-rule 段。
+_SD_LOCALRULE="address /localhost/127.0.0.1"
 
 # 【v.180.148】两个判据分开，绝不混用：
 #
@@ -158,6 +178,28 @@ _sd_conf_ok() {
         fi
     done
     [ "$_sc_miss" = 0 ]
+}
+
+# localhost 行是否已经在位。整行精确匹配（-x），不是子串 ——
+# 否则 address /localhost/127.0.0.2 这种也会被判成已配好。
+_sd_localrule_ok() {
+    [ -f "$PKGROOT/etc/smartdns/custom.conf" ] || return 1
+    grep -qxF "$_SD_LOCALRULE" "$PKGROOT/etc/smartdns/custom.conf" 2>/dev/null
+}
+
+# 追加该行。幂等：已在位直接返回 0，不重复追加。
+# 原文件末尾没有换行时先补一个，否则新行会粘到最后一行注释上变成废行。
+_sd_localrule() {
+    _slr_f="$PKGROOT/etc/smartdns/custom.conf"
+    _sd_localrule_ok && return 0
+    [ -d "$PKGROOT/etc/smartdns" ] || mkdir -p "$PKGROOT/etc/smartdns" 2>/dev/null
+    [ -f "$_slr_f" ] || : >"$_slr_f"
+    if [ -s "$_slr_f" ] && [ -n "$(tail -c 1 "$_slr_f" 2>/dev/null)" ]; then
+        printf '\n' >>"$_slr_f" || return 1
+    fi
+    printf '%s\n' "$_SD_LOCALRULE" >>"$_slr_f" || return 1
+    log "已追加 localhost 本地解析（/etc/smartdns/custom.conf）"
+    return 0
 }
 
 # 界面是否可用。三段判据，都不碰包管理器（apk / opkg 通用）：
@@ -369,10 +411,12 @@ _sd_config() {
         _sd_pkg_ok || { log "装包后仍判不在位，放弃写配置"; return 1; }
     fi
     _sd_conf
+    _sd_localrule || { log "localhost 本地解析写入失败"; _sd_discard; return 1; }
     _sd_cfg_main || { log "主配置段写入失败"; _sd_discard; return 1; }
     _sd_cfg_upstream || { log "上游表写入失败，不接管 DNS"; _sd_discard; return 1; }
     _sd_apply || return 1
     log "smartdns 已接管 DNS：13 条上游（国内 9 UDP / 境外 4 DoT），dnsmasq 由 init 让出 53"
+    log "localhost 本地解析在位：adblock 的 nslookup localhost. 探活可通过"
     return 0
 }
 
@@ -404,15 +448,19 @@ case "${1:-}" in
     # --check 返 0，探针 100 秒无动作。判定清单与 _sd_conf() 共用 SD_CONF_FILES。
     #
     # 【2026-11-02】退出码分三态，让探针按「坏在哪一层」选修法：
-    #   0 = 服务在（53 归它）+ 五个规则文件齐
+    #   0 = 服务在（53 归它）+ 五个规则文件齐 + localhost 行在位
     #   1 = 服务没起来（53 未接管 / 二进制缺失）—— 硬故障，只能 --config
     #   3 = 服务正常、只有规则文件缺 —— 软故障，--conf 补文件即可
+    #   4 = 服务正常、文件齐，只缺 /etc/smartdns/custom.conf 的 localhost 行
+    #       —— 2026-11-07 新增。缺它 adblock 每次 reload 白等 30 秒并打假失败；
+    #       修法同样走 --config（改 custom.conf 必须重启 smartdns 才载入）
     # 为什么要分开：--config 会 commit + 重启 smartdns（约 15 秒 DNS 中断），
     # 而「文件被删、进程还活着」这种软故障只要把文件拷回去就完事，重启纯属白掉线。
     # 只判 0/非 0 的调用点（rc.local 开机门票、其它 sh -c 判断）语义不变：
     # 非 0 照旧走 --config，兜底方向没变。
     _sd_serve || exit 1
     _sd_conf_ok || exit 3
+    _sd_localrule_ok || exit 4
     exit 0
     ;;
 --check-pkg)
@@ -422,13 +470,16 @@ case "${1:-}" in
     _sd_pkg && exit 0 || exit 1
     ;;
 --conf)
-    _sd_conf && exit 0 || exit 1
+    _sd_conf && _sd_localrule && exit 0 || exit 1
+    ;;
+--localrule)
+    _sd_localrule && exit 0 || exit 1
     ;;
 --luci)
     _sd_luci && exit 0 || exit 1
     ;;
 *)
-    echo "用法：$0 [--check|--pkg|--conf|--luci]" >&2
+    echo "用法：$0 [--check|--pkg|--conf|--luci|--localrule]" >&2
     exit 2
     ;;
 esac
