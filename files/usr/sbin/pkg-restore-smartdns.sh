@@ -68,7 +68,7 @@ fi
 log() { printf '[PKG] %s\n' "$*"; }
 
 # /etc/smartdns/ 下必须存在的规则文件（与构建期固化进固件的那批一致）
-# 已淘汰的旧上游（2026-11-07 起 Cn 组转 DoT）。这几个 IP 在真机上实测 TCP 853
+# 已淘汰的旧上游（2026-11-07 起 CN 组转 DoT）。这几个 IP 在真机上实测 TCP 853
 # 不通或解析失败，留着只会拖慢并发查询（超时后才用上其他节点）。
 SD_RETIRED_IPS="180.76.76.76 101.226.4.6 218.30.118.6 123.125.81.6 140.207.198.6 1.2.4.8 119.29.29.29 8.8.4.4 1.1.1.1 1.0.0.1"
 
@@ -314,13 +314,21 @@ _sd_cfg_main() {
     # 把 dhcp.@dnsmasq[0].port 置 0 并重启 dnsmasq。显式写是为了防止在 LuCI 里
     # 误关一次就永久失效 —— 与本脚本其它字段「写死纠正」的口径一致。
     uci -q set "smartdns.$_sdc_seg.auto_set_dnsmasq=1" || return 1
+    # 组名 CN / out（用户 2026-11-07 定，全大写国内、全小写境外）。
+    # bind 行的 -group 来自这个字段，上游段的 server_group 必须与它逐字一致，
+    # 大小写不同就是两个组 —— 组名对不上时 53 端口绑的组没有上游，解析全空。
+    uci -q set "smartdns.$_sdc_seg.server_flags=-group CN" || return 1
+    # 第二服务器 = 6553，只走 out 组、不缓存：给 honk 的 dae 在分流后使用。
+    uci -q set "smartdns.$_sdc_seg.seconddns_port=6553" || return 1
+    uci -q set "smartdns.$_sdc_seg.seconddns_no_cache=1" || return 1
+    uci -q set "smartdns.$_sdc_seg.seconddns_server_group=out" || return 1
     uci -q set "smartdns.$_sdc_seg.cache_size=32768" || return 1
     uci -q set "smartdns.$_sdc_seg.serve_expired=1" || return 1
     uci -q set "smartdns.$_sdc_seg.prefetch_domain=1" || return 1
     return 0
 }
 
-# 上游 7 条写死（Cn 3 条 DoT + Out 4 条 DoT）。按 ip 定位段：有就修正字段，没有就新建；
+# 上游 6 条写死（CN 3 条 DoT + out 1 DoT + 2 DoH）。按 ip 定位段：有就修正字段，没有就新建；
 # 同 ip 重复段只留第一个。
 # 表外用户自己加的上游原样保留（不删除）。
 _sd_cfg_upstream() {
@@ -329,7 +337,7 @@ _sd_cfg_upstream() {
     for _sdc_s in $(uci -q show smartdns 2>/dev/null | grep -E '=server$' | cut -d. -f2 | cut -d= -f1); do
         _sdc_map="$_sdc_map$(uci -q get "smartdns.$_sdc_s.ip" 2>/dev/null)=$_sdc_s "
     done
-    # 【2026-11-07】淘汰的旧上游：Cn 组统一走 DoT 后，这些 UDP 节点全部下线。
+    # 【2026-11-07】淘汰的旧上游：CN 组统一走 DoT 后，这些 UDP 节点全部下线。
     # 只删这几个写死的 IP —— 表外用户自己加的上游仍然不动。
     for _sdc_rip in $SD_RETIRED_IPS; do
         for _sdc_p in $_sdc_map; do
@@ -377,19 +385,19 @@ _sd_cfg_upstream() {
         fi
         _sdc_n=$((_sdc_n + 1))
     done <<'SD_UPSTREAM_EOF'
-# 【2026-11-07】Cn 组改 DoT：实测本链路 TCP 53 被干扰（阿里/腾讯连上即 RST、
+# 【2026-11-07】CN 组改 DoT：实测本链路 TCP 53 被干扰（阿里/腾讯连上即 RST、
 # 百度 SYN 无回应），而 853 端口可达且解析正常（91 B，与 UDP 同长）。
 # 只有这 3 条实测可用：阿里 2 条、腾讯 1 条（dot.pub → 120.53.53.53）。
 # 百度 / 360 / CNNIC 的 853 不通或解析失败，全部淘汰，见 SD_RETIRED_IPS。
-alidns 223.5.5.5 tls Cn dns.alidns.com
-alidns 223.6.6.6 tls Cn dns.alidns.com
-dnspod 120.53.53.53 tls Cn dot.pub
-google 8.8.8.8 tls Out dns.google
-# Out 组：honk 开着时才可达（实测 8.8.8.8 的 853/443、dns.google 的 DoH、
+alidns 223.5.5.5 tls CN dns.alidns.com
+alidns 223.6.6.6 tls CN dns.alidns.com
+dnspod 120.53.53.53 tls CN dot.pub
+google 8.8.8.8 tls out dns.google
+# out 组：honk 开着时才可达（实测 8.8.8.8 的 853/443、dns.google 的 DoH、
 # cloudflare 的 DoH 都能真解析出 91 B；cloudflare 的 853 与 1.1.1.1 的 DoT 均为 0 B）。
 # DoH 必须写域名，用 IP 形式（https://8.8.8.8/dns-query）实测 0 B 失败。
-google https://dns.google/dns-query https Out dns.google
-cloudflare https://cloudflare-dns.com/dns-query https Out cloudflare-dns.com
+google https://dns.google/dns-query https out dns.google
+cloudflare https://cloudflare-dns.com/dns-query https out cloudflare-dns.com
 SD_UPSTREAM_EOF
     [ "$_sdc_n" -eq 6 ] || { log "上游按表处理条数异常（$_sdc_n ≠ 6），不接管 DNS"; return 1; }
     return 0
