@@ -70,7 +70,13 @@ log() { printf '[PKG] %s\n' "$*"; }
 # /etc/smartdns/ 下必须存在的规则文件（与构建期固化进固件的那批一致）
 # 已淘汰的旧上游（2026-11-07 起 CN 组转 DoT）。这几个 IP 在真机上实测 TCP 853
 # 不通或解析失败，留着只会拖慢并发查询（超时后才用上其他节点）。
-SD_RETIRED_IPS="180.76.76.76 101.226.4.6 218.30.118.6 123.125.81.6 140.207.198.6 1.2.4.8 119.29.29.29 8.8.4.4 1.1.1.1 1.0.0.1"
+#
+# 【2026-11-07.2326】这个黑名单变量已删除。用户定「改成全清，防止错误配置遗留」：
+# 上游写入改为「删光所有 server 段再按表重建」，黑名单不再是执行路径的一部分。
+# 保留这份 IP 清单只为留档 —— 它们是被真机实测否掉的，将来想复活某条要先测通。
+#   国内 UDP：180.76.76.76 123.125.81.6（百度）、101.226.4.6 218.30.118.6（DNS派）、
+#             140.207.198.6（联通）、1.2.4.8（CNNIC）、119.29.29.29（DNSPod）
+#   境外：8.8.4.4、1.1.1.1、1.0.0.1（855/443 实测 0 B，与 8.8.8.8 的 91 B 对照）
 
 SD_CONF_FILES="address.conf blacklist-ip.conf custom.conf domain-block.list domain-forwarding.list"
 
@@ -335,47 +341,54 @@ _sd_cfg_main() {
     return 0
 }
 
-# 上游 6 条写死（CN 3 条 DoT + out 1 DoT + 2 DoH）。按 ip 定位段：有就修正字段，没有就新建；
-# 同 ip 重复段只留第一个。
-# 表外用户自己加的上游原样保留（不删除）。
+# 上游 6 条写死（CN 3 条 DoT + out 1 DoT + 2 DoH）。**全清重建**：先把所有 server
+# 段删光，再按下面 6 行表逐条新建（用户 2026-11-07 定，理由是「防止错误配置遗留」）。
+#
+# 为什么不再做「按 ip 找段修正 + 淘汰黑名单」：
+#   · 覆盖式写入本来就会冲掉 LuCI 里手改的上游，黑名单那层「部分保留」语义自相矛盾；
+#   · 黑名单是硬编码的 10 个 IP，漏掉任何一个旧段它都会继续生效 —— 53 的 CN 组还有
+#     UDP 上游、out 组把实测 0 B 的死节点当可用，等于 DoT 改造白做；
+#   · 刷机后新固件的 uci 里本来就没有那些段，黑名单永远匹配不到，是死代码。
+# 代价（已知并接受）：LuCI 里手加的表外上游活不过一次 --config；要长期保留只能进表。
+#
+# 事务性：删除只落在 uci 暂存目录（/tmp/.uci），后面任何一步失败都会 _sd_discard
+# revert，不会真的把表删成空的；只有 commit 成功才算落地。
+#
+# 删除必须逐个来：匿名段删掉 @server[0] 之后，后面的段会整体前移一格，拿预先展开
+# 的列表批量删会删错段或漏段。所以每轮重新取「当前第一条」，直到一条不剩
+# （50 轮上限兜底，delete 失败立刻退出，不死循环）。
 _sd_cfg_upstream() {
-    # 先建「ip=段名」索引，避免每条都重扫一遍 uci show（6 条 × 6 段 = 36 次 fork）
-    _sdc_map=" "
-    for _sdc_s in $(uci -q show smartdns 2>/dev/null | grep -E '=server$' | cut -d. -f2 | cut -d= -f1); do
-        _sdc_map="$_sdc_map$(uci -q get "smartdns.$_sdc_s.ip" 2>/dev/null)=$_sdc_s "
+    # 守门①：uci 读不出来就什么都别做。否则下面「一条都没取到」会被当成
+    # 「本来就没有旧段」，接着 add 6 条 —— 结果是 6 条新的叠在 N 条旧的上，
+    # 而末尾 -eq 6 只数表内行、照样通过，脏配置被静默留下。
+    uci -q show smartdns >/dev/null 2>&1 || {
+        log "uci show smartdns 失败，无法确认旧上游已清空，放弃写配置"
+        return 1
+    }
+    _sdc_g=0
+    while [ "$_sdc_g" -lt 50 ]; do
+        _sdc_g=$((_sdc_g + 1))
+        _sdc_s=$(uci -q show smartdns 2>/dev/null \
+            | sed -n 's/^smartdns\.\([^.=]*\)=server$/\1/p' | head -n1)
+        [ -n "$_sdc_s" ] || break
+        uci -q delete "smartdns.$_sdc_s" 2>/dev/null || break
     done
-    # 【2026-11-07】淘汰的旧上游：CN 组统一走 DoT 后，这些 UDP 节点全部下线。
-    # 只删这几个写死的 IP —— 表外用户自己加的上游仍然不动。
-    for _sdc_rip in $SD_RETIRED_IPS; do
-        for _sdc_p in $_sdc_map; do
-            [ "${_sdc_p%%=*}" = "$_sdc_rip" ] || continue
-            uci -q delete "smartdns.${_sdc_p#*=}" 2>/dev/null
-            _sdc_map=$(printf '%s' "$_sdc_map" | sed "s| $_sdc_rip=[^ ]*| |")
-        done
-    done
+    # 守门②：清完必须真的一条不剩。delete 失败或撞上 50 轮上限都会提前 break，
+    # 那时继续 add 就是「新的叠旧的」。这里复核一次，不干净就整条路径作废。
+    _sdc_left=$(uci -q show smartdns 2>/dev/null | grep -c '=server$')
+    case "$_sdc_left" in ''|*[!0-9]*) _sdc_left=-1 ;; esac
+    [ "$_sdc_left" = "0" ] || {
+        log "旧上游未清干净（剩 $_sdc_left 条），不接管 DNS"
+        return 1
+    }
     _sdc_n=0
     while read -r _sdc_name _sdc_ip _sdc_tp _sdc_grp _sdc_host; do
         # 表里带 # 注释行，必须跳过 —— 否则注释会被当成一条上游写进 uci，
         # 条数校验直接炸（真机踩过：4 行注释让 7 条变 11 条）。
         case "$_sdc_name" in ''|'#'*) continue ;; esac
         [ -n "$_sdc_ip" ] || continue
-        _sdc_hit=""
-        _sdc_dup=""
-        for _sdc_p in $_sdc_map; do
-            [ "${_sdc_p%%=*}" = "$_sdc_ip" ] || continue
-            if [ -z "$_sdc_hit" ]; then
-                _sdc_hit=${_sdc_p#*=}
-            else
-                _sdc_dup="$_sdc_dup ${_sdc_p#*=}"
-            fi
-        done
-        for _sdc_d in $_sdc_dup; do
-            uci -q delete "smartdns.$_sdc_d" 2>/dev/null
-        done
-        if [ -z "$_sdc_hit" ]; then
-            uci -q add smartdns server >/dev/null 2>&1
-            _sdc_hit="@server[-1]"
-        fi
+        uci -q add smartdns server >/dev/null 2>&1
+        _sdc_hit="@server[-1]"
         uci -q set "smartdns.$_sdc_hit.enabled=1"
         uci -q set "smartdns.$_sdc_hit.name=$_sdc_name"
         uci -q set "smartdns.$_sdc_hit.ip=$_sdc_ip"
@@ -395,7 +408,7 @@ _sd_cfg_upstream() {
 # 【2026-11-07】CN 组改 DoT：实测本链路 TCP 53 被干扰（阿里/腾讯连上即 RST、
 # 百度 SYN 无回应），而 853 端口可达且解析正常（91 B，与 UDP 同长）。
 # 只有这 3 条实测可用：阿里 2 条、腾讯 1 条（dot.pub → 120.53.53.53）。
-# 百度 / 360 / CNNIC 的 853 不通或解析失败，全部淘汰，见 SD_RETIRED_IPS。
+# 百度 / 360 / CNNIC 的 853 不通或解析失败，全部淘汰（清单见文件头留档）。
 alidns 223.5.5.5 tls CN dns.alidns.com
 alidns 223.6.6.6 tls CN dns.alidns.com
 dnspod 120.53.53.53 tls CN dot.pub
