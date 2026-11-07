@@ -92,8 +92,10 @@ ck "R34.3d 不再现场复验（函数体里没有 _up_n）" \
 ck "R34.3e 不再 sleep 等服务" \
    "$(printf '%s' "$_ur" | grep -c 'sleep')" "0"
 _uw=$(code _up_watch)
-ck "R34.3f 交 --config" "$(printf '%s' "$_uw" | grep -c '_up_run --config')" "1"
-ck "R34.3m 判据两条都在（_up_svc + _up_n）" \
+ck "R34.3f 修复走 _up_run \"\$_uw_cmd\"" \
+   "$(printf '%s' "$_uw" | grep -c '_up_run "$_uw_cmd"')" "1"
+ck "R34.3f2 默认命令是 --config" \
+   "$(printf '%s' "$_uw" | grep -c '^    _uw_cmd="--config"$')" "1"
    "$(printf '%s' "$_uw" | grep -c '_up_svc')|$(printf '%s' "$_uw" | grep -c '_up_n')" "1|1"
 ck "R34.3g 不调 _run_fix" "$(printf '%s' "$_uw" | grep -c '_run_fix')" "0"
 ck "R34.3h 不跑 bootstrap" "$(printf '%s' "$_uw" | grep -c '_boot')" "0"
@@ -129,7 +131,7 @@ log_out="$TMPD/out.log"
 # 上游条数由 UPSRV 控制；--config 成败由 REPAIR_RC 控制；bootstrap 只打点
 plog() { printf '%s\n' "$*" >> "$log_out"; }
 _up_n() { printf '%s\n' "${UPSRV:-0}"; }
-_up_svc() { [ "${SVC_RC:-0}" = "0" ] && return 0; return 1; }
+_up_svc() { return "${SVC_RC:-0}"; }
 _up_run() { [ "${REPAIR_RC:-1}" = "0" ] && return 0; return 1; }
 _boot() { echo x >> "$TMPD/boot_calls"; return 0; }
 . "$LIB"
@@ -145,7 +147,18 @@ ck "R34.4b 上游在时计数 0" "$P_UP_BAD" "0"
 SVC_RC=1
 _up_watch
 ck "R34.4b1 服务没生效也算坏" "$P_ACTION" "up-warn"
-ck "R34.4b2 原因指向 53" "$(grep -c '53 未由 smartdns 接管' "$log_out")" "1"
+ck "R34.4b2 原因指向 53" "$(grep -c '53 未接管' "$log_out")" "1"
+
+# 【2026-11-07】rc=4：只缺 custom.conf 的 localhost 行。必须单独一种原因，
+# 不能并到「53 未接管」里 —— 那会把排查人带到端口/二进制方向。
+SVC_RC=4
+P_ACTION=""
+_up_watch
+ck "R34.4b3 缺 localhost 行也算坏" "$P_ACTION" "up-warn"
+ck "R34.4b4 原因指向 localhost 本地解析" \
+   "$(grep -c 'localhost 本地解析缺失' "$log_out")" "1"
+ck "R34.4b5 不误报成 53 未接管" \
+   "$(grep -c '53 未接管' "$log_out")" "1"
 SVC_RC=0
 P_UP_BAD=0; P_UP_FIX=0; P_ACTION=""
 
