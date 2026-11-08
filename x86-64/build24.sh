@@ -49,9 +49,15 @@ PACKAGES="$PACKAGES curl"
 PACKAGES="$PACKAGES -dnsmasq dnsmasq-full"
 PACKAGES="$PACKAGES luci-i18n-diskman-zh-cn"
 PACKAGES="$PACKAGES luci-i18n-firewall-zh-cn"
-PACKAGES="$PACKAGES luci-theme-argon"
-PACKAGES="$PACKAGES luci-app-argon-config"
-PACKAGES="$PACKAGES luci-i18n-argon-config-zh-cn"
+# 【2026-11-09】argon 三件套从这里移除，不再预装。
+# 依据一：files/etc/uci-defaults/99-custom.sh L9 硬设
+#     uci set luci.main.mediaurlbase="/luci-static/bootstrap"
+#   所以 argon 从来不是默认主题，装了也不生效，只多占 squashfs。
+# 依据二：实测三包体积 391,828 + 4,158 + 2,131 = 398,117 B。
+# 依据三：它不是系统组件、不是任何包的依赖，用户 2026-11-09 定
+#   「不需要强保护」。与 25.12 / 25.12-daed / 25.12-honk 三仓同一轮处理。
+# 注意：argon 本来就不在 _PC_WANT 白名单里，所以包库和 manifest 都不受影响，
+#   这次只影响固件本体是否安装它。
 
 PACKAGES="$PACKAGES luci-i18n-package-manager-zh-cn"
 PACKAGES="$PACKAGES luci-i18n-ttyd-zh-cn"
@@ -625,6 +631,44 @@ echo "==> [pkg-cache] 来源 B（官方 feed + 依赖闭包）：$_pc_b 个"
 #      要把它到底是什么打进日志，否则下次照样只能猜；
 #   ② 隔离到 /tmp，不直接删：判断可能错，错了还得能捡回来；
 #   ③ 熔断：坏到 max(3, 总数 5%) 以上，就不是个别畸形文件了，一个都不动。
+# --- 【2026-11-09】同名多版本收敛（落库后、校验前）---
+# #254 构建日志实测库里躺着两对同名不同版本：
+#   daed_1.24.0-r1_x86_64.ipk        +  daed_2026.05.26-r1_x86_64-openwrt-24.10.ipk
+#   ipt2socks_1.1.4-r2_x86_64.ipk    +  ipt2socks_1.1.4-r3_x86_64.ipk
+# 成因：来源 A 的 `[ -f "$_PC_DIR/$_bn" ]` 只比**完整文件名**，来源 B 同理，
+#       不同版本落库时各留一份，谁也不覆盖谁。
+# 后果：运行时 pkg-cache-restore.sh L82 兜底用 `ls | tail -n1`，取的是**字典序**
+#       最后一个。daed / ipt2socks 恰好字典序等于版本序，所以现在没出事；
+#       可一旦出现 1.9 与 1.10 这种，tail 会取到 1.9（旧版），旧版降级失败
+#       会把包卸掉 —— 正是本文件 v.180.194 注释里记的 692 → 690 那个坑。
+# 处理：建库阶段按版本序收敛到最高版本，其余挪到 /tmp/ipk-dup 留证（不硬删）。
+#       构建机是 GNU coreutils，sort -V 可用；路由器 busybox 没有 -V，
+#       所以只在建库阶段收敛，运行时脚本一行不改。
+_pc_dup=0
+for _pfx in $(ls "$_PC_DIR"/*.ipk 2>/dev/null | sed 's#.*/##; s/_[0-9].*//' | sort -u); do
+    _dcnt=0
+    _dvlist=""
+    for _df in "$_PC_DIR/$_pfx"_*.ipk; do
+        [ -f "$_df" ] || continue
+        _dcnt=$((_dcnt + 1))
+        _drest=${_df##*/}
+        _drest=${_drest#"${_pfx}_"}
+        _dvlist="$_dvlist ${_drest%%_*}"
+    done
+    [ "$_dcnt" -gt 1 ] || continue
+    _dvkeep=$(printf '%s\n' $_dvlist | sort -V | tail -n1)
+    mkdir -p /tmp/ipk-dup 2>/dev/null
+    for _dv in $_dvlist; do
+        [ "$_dv" = "$_dvkeep" ] && continue
+        mv -f "$_PC_DIR/$_pfx"_"$_dv"_*.ipk /tmp/ipk-dup/ 2>/dev/null \
+            && _pc_dup=$((_pc_dup + 1))
+    done
+    echo "    同名收敛：$_pfx 保留 $_dvkeep，移出 $((_dcnt - 1)) 个旧版"
+done
+if [ "$_pc_dup" -gt 0 ]; then
+    echo "==> [pkg-cache] 同名多版本收敛：共移出 $_pc_dup 个旧版（在 /tmp/ipk-dup，未删除）"
+fi
+
 _pc_total=$(ls "$_PC_DIR"/*.ipk 2>/dev/null | wc -l)
 _pc_cap=$((_pc_total / 20))
 [ "$_pc_cap" -lt 3 ] && _pc_cap=3
