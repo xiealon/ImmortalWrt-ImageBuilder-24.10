@@ -2,25 +2,30 @@
 
 ImmortalWrt **24.10.x** x86-64 固件构建线：官方 ImageBuilder 直接出固件，带 CrowdSec LXC。
 
-## 三条线的差异
+## 四条线的差异
 
-| | 25.12 | 24.10 | 25.12-honk |
-|---|---|---|---|
-| 用途 | **主线** | 老版本线，维护用 | **跑 honk** |
-| workflow | 27,449 B / 485 行 | 27,853 B / 494 行 | **37,419 B / 641 行** |
-| `runs-on` | ubuntu-22.04 | ubuntu-22.04 | **ubuntu-24.04** |
-| ImageBuilder | 官方 docker，tag 跟下拉（25.12.0 / 25.12.1） | 官方 docker，tag 跟下拉（24.10.0 ~ 24.10.6） | **自建 IB 包**，`v25.12.2-ib-x86-64-r2` |
-| apk 来源 | 官方源 | 官方源 | **自建 pkg 包**，`v25.12.2-pkg-x86-64-r2` |
-| 版本下拉 | 2 档（25.12.0 / 25.12.1） | 7 档（24.10.0 ~ 24.10.6） | **1 档（25.12.2），不可切** |
-| 主 config | `imm25.config` 303,813 B / 8,266 行 | `imm.config` 284,106 B / 7,705 行 | `imm25.config` 303,823 B / 8,272 行 |
-| `=y` / `=m` | 968 / 1,238 | 952 / 1,005 | 1,004 / 1,227 |
-| 构建脚本 | `build25.sh` 56,581 B / 1,028 行 | `build24.sh` 47,780 B / 906 行 | `build25.sh` 63,180 B / 1,146 行 |
-| 自定义包清单 | `apk-custom-packages.sh` 11,110 B | `custom-packages.sh` 11,263 B | `apk-custom-packages.sh` 11,356 B |
-| 内核 | 官方 | 官方 | **自建，ftrace 五项 + BTF，hash `26ed6bc1`** |
-| honk 组 apk | 无 | 无 | **5 个，构建时从 `honk-apk` Release 取** |
-| `sha256/` 目录 | 无 | 无 | **有** |
-| CrowdSec LXC / rootfs-skel / 网络校验 | 有 | 有 | 有 |
-| 文档 | README + CROWDSEC（533 行）+ CHANGELOG（2,259 行） | 同左 | 同左 |
+| | 25.12 | 25.12-honk | 25.12-daed | 24.10 |
+|---|---|---|---|---|
+| 用途 | **主线，全官方源** | **纯 honk** | **honk + daed** | 老版本线，维护用 |
+| workflow | 28,504 B / 496 行 | 37,645 B / 644 行 | 37,419 B / 641 行 | 27,853 B / 494 行 |
+| `runs-on` | ubuntu-22.04 | **ubuntu-24.04** | **ubuntu-24.04** | ubuntu-22.04 |
+| ImageBuilder | 官方 docker `x86-64-openwrt-25.12.0/1/2` | **自建 IB**，`v25.12.2-ib-x86-64-r2` | **自建 IB**，同左 | 官方 docker `24.10.0 ~ 24.10.6` |
+| apk 来源 | 官方源 | **自建 pkg**，`v25.12.2-pkg-x86-64-r2` | **自建 pkg**，同左 | 官方源 |
+| 版本下拉 | 3 档（25.12.0 / .1 / .2） | **1 档（25.12.2），不可切** | **1 档（25.12.2），不可切** | 7 档（24.10.0 ~ .6） |
+| 主 config | `imm25.config` 303,823 B / 8,272 行 | 同左 | 同左 | `imm.config` 284,106 B / 7,705 行 |
+| `=y` / `=m`（全部） | 999 / 1,227 | 999 / 1,227 | **1,002 / 1,224** | 952 / 1,005 |
+| `=y` / `=m`（kmod） | 133 / 1,060 | 133 / 1,060 | **136 / 1,057** | — |
+| 构建脚本 | `build25.sh` 63,180 B / 1,146 行 | 同左 | `build25.sh` 66,675 B / 1,192 行 | `build24.sh` 47,780 B / 906 行 |
+| 自定义包清单 | `apk-custom-packages.sh` **11,346 B** | 11,356 B | 11,356 B | `custom-packages.sh` 11,263 B |
+| 内核 | **官方**，无 `DYNAMIC_FTRACE` | **自建**，ftrace 五项 + BTF，hash `26ed6bc1` | **自建**，同左 | 官方 |
+| honk 组 apk | **默认关闭**（注释可开，装上起不来） | **5 个，从 `honk-apk` Release 取** | **5 个** | 无 |
+| daed 组 apk | 随包清单进固件 | 无 | **6 个** | 无 |
+| `sha256/` 目录 | 有 | 有 | 有 | 无 |
+| CrowdSec LXC / rootfs-skel / 网络校验 | 有 | 有 | 有 | 有 |
+
+> **两条 25.12 自建线（honk / daed）的差别**：daed 线多 `daed` / `daed-geoip` / `daed-geosite` / `luci-app-daed` / `luci-i18n-daed-zh-cn` / `kmod-xdp-sockets-diag` 六个包，config 里对应 3 个 `=y`（总 `=y` 从 999 到 1,002）。
+>
+> **主线（25.12）和两条自建线的本质差别**：内核。自建内核开了 `CONFIG_DYNAMIC_FTRACE` 五项 + `CONFIG_DEBUG_INFO_BTF`，honk 才能把 eBPF 程序挂到内核函数上；官方镜像的内核没开这些，honk 装得上、LuCI 里能点，就是起不来。
 
 **完整的 CrowdSec LXC 运行期逻辑、网络与防火墙校验、`rootfs-skel` 契约 → [CROWDSEC.md](https://github.com/xiealon/ImmortalWrt-ImageBuilder-25.12/blob/master/CROWDSEC.md)；v.103 起的改动记录 → [CHANGELOG.md](https://github.com/xiealon/ImmortalWrt-ImageBuilder-25.12/blob/master/CHANGELOG.md)**
 
