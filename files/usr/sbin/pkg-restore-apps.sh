@@ -275,7 +275,23 @@ _pa_repair() {
     for _pa_p in $(_pa_missing); do
         _pa_n=$((_pa_n + 1))
         log "装回 $_pa_p"
-        if "$_RESTORE" --tree "$_pa_p"; then
+        # 【2026-11-09】按形态分两条路（与 25.12 线对齐）。原来一律走 --tree，看似通用，实际对
+        # 「包在册、只有文件缺失」这种形态是空转：
+        #   --tree -> pkg-restore.sh 的 _pr_pkg -> 先判 _pr_installed（包在册=真）
+        #   -> 再判 _pr_files_ok，而它的 case 只认 /usr/bin /usr/sbin /etc/init.d
+        #   /lib/*.so* /usr/lib/*.so*，判据看不见的路径一律当「文件齐」
+        #   -> 打「已安装，跳过」-> 返回 0，一个字节没写。
+        # 所以：
+        #   ① 包不在册 -> --tree，连依赖一起装；
+        #   ② 包在册、判据没过 -> --force，直连 PCR_FORCE=1 -> opkg --force-reinstall，
+        #      按包内容重装，文件与软链接都会重建。
+        if _pa_installed "$_pa_p"; then
+            if "$_RESTORE" --force "$_pa_p"; then
+                log "装回完成 $_pa_p（强制重装：包在册，文件缺失）"
+            else
+                log "装回失败 $_pa_p（强制重装没成功，本地包库可能没有它）"
+            fi
+        elif "$_RESTORE" --tree "$_pa_p"; then
             log "装回完成 $_pa_p"
         else
             log "装回失败 $_pa_p（本地包库没有它，或包管理器不可用）"
