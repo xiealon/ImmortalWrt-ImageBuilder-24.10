@@ -334,6 +334,7 @@ _DEPS_ROM_LIST="$ROMDIR/usr/lib/opkg/info"
 # 实体文件去管，软链接自然跟着好。
 _DEPS_PKGS="kmod-dummy kmod-nft-socket kmod-nft-tproxy kmod-sched-bpf
 kmod-sched-core kmod-veth kmod-inet-diag kmod-tun kmod-netlink-diag
+kmod-zram
 ca-bundle libcap yq ip-full firewall4 coreutils-nohup libopenssl3
 v2ray-geoip v2ray-geosite"
 
