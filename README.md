@@ -2,11 +2,13 @@
 
 ImmortalWrt **24.10.x** x86-64 固件构建线：官方 ImageBuilder 直接出固件，带 CrowdSec LXC。
 
+eBPF 代理用 **新版 daed 三件套**（`daed` / `luci-app-daede` / `vmlinux-btf`），来自 kenzok8/openwrt-daede 的 Release，由 `build24.sh` 下进 `packages/` 当本地包安装；本线**不装 honk**。
+
 ## 四条线的差异
 
 | | 25.12 | 25.12-honk | 25.12-daed | 24.10 |
 |---|---|---|---|---|
-| 用途 | **主线，官方源 + honk** | **纯 honk** | **honk + daed** | 老版本线，维护用 |
+| 用途 | **主线，官方源 + daed** | **纯 honk** | **honk（+ 预留 daed）** | 老版本线，官方源 + daed |
 | workflow | 28,506 B / 496 行 | 37,645 B / 644 行 | 37,419 B / 641 行 | 27,853 B / 494 行 |
 | `runs-on` | ubuntu-22.04 | **ubuntu-24.04** | **ubuntu-24.04** | ubuntu-22.04 |
 | ImageBuilder | 官方 docker `x86-64-openwrt-25.12.0/1/2` | **自建 IB**，`v25.12.2-ib-x86-64-r2` | **自建 IB**，同左 | 官方 docker `24.10.0 ~ 24.10.6` |
@@ -15,18 +17,18 @@ ImmortalWrt **24.10.x** x86-64 固件构建线：官方 ImageBuilder 直接出�
 | 主 config | `imm25.config` 303,823 B / 8,272 行 | 同左 | 同左 | `imm.config` 284,106 B / 7,705 行 |
 | `=y` / `=m`（全部） | 999 / 1,227 | 999 / 1,227 | **1,002 / 1,224** | 952 / 1,005 |
 | `=y` / `=m`（kmod） | 133 / 1,060 | 133 / 1,060 | **136 / 1,057** | — |
-| 构建脚本 | `build25.sh` **68,177 B / 1,234 行** | `build25.sh` **67,172 B / 1,218 行** | `build25.sh` **70,667 B / 1,264 行** | `build24.sh` **50,349 B / 950 行** |
-| 自定义包清单 | `apk-custom-packages.sh` **11,874 B** | 11,356 B | 11,356 B | `custom-packages.sh` 11,263 B |
+| 构建脚本 | `build25.sh` **71,078 B / 1,288 行** | `build25.sh` **67,702 B / 1,226 行** | `build25.sh` **70,544 B / 1,265 行** | `build24.sh` **54,538 B / 1,039 行** |
+| 自定义包清单 | `apk-custom-packages.sh` **12,372 B** | 11,410 B | 11,287 B | `custom-packages.sh` 12,231 B |
 | 内核 | **官方镜像自带** | **自建**，五项 + BTF 写死并断言，hash `26ed6bc1` | **自建**，同左 | **官方镜像自带** |
-| honk 组 apk | **默认装**（5 个，从 `honk-apk` Release 取） | **5 个，从 `honk-apk` Release 取** | **5 个** | 无 |
-| daed 组 apk | 随包清单进固件 | 无 | **6 个** | 无 |
+| honk 组 apk | 无 | **2 个**（`honk` + `luci-app-honk`） | **2 个，同左** | 无 |
+| daed 组 apk | **3 个**（kenzok8 Release） | 无 | 无 | **3 个**，ipk，同上来源 |
 | `sha256/` 目录 | 有 | 有 | 有 | 无 |
 | 恢复探针 | `_pa_repair` 缺包走 `--tree`、缺文件走 `--force` | 同左 | 同左 | **同左**（2026-11-09 对齐） |
 | CrowdSec LXC / rootfs-skel / 网络校验 | 有 | 有 | 有 | 有 |
 
-> **两条 25.12 自建线（honk / daed）的差别**：daed 线多 `daed` / `daed-geoip` / `daed-geosite` / `luci-app-daed` / `luci-i18n-daed-zh-cn` / `kmod-xdp-sockets-diag` 六个包，config 里对应 3 个 `=y`（总 `=y` 从 999 到 1,002）。
+> **25.12 自建线（honk / daed）现在都只装 honk 两件套**：daed 线保留了 config 里那 3 个 `=y`（总 `=y` 1,002），包清单里跑的是 honk；要装 daed 就把 `apk-custom-packages.sh` 换成 `daed luci-app-daede vmlinux-btf`，`build25.sh` 里的 honk 取包段换成 25.12 主线那份 daed 段即可。
 >
-> **主线（25.12）和两条自建线的本质差别**：内核来源。自建线把 honk 依赖的 `CONFIG_DYNAMIC_FTRACE` 五项 + `CONFIG_DEBUG_INFO_BTF` 写死在自建内核里，构建期逐项断言，实测 honk 挂载成功（`eBPF loaded and attached`、6 个 cgroup 程序、`dae0` 建链）；主线用官方镜像自带内核、未做改造，honk 照常装得进、用得了。
+> **两条官方线（25.12 / 24.10）和两条自建线的本质差别**：内核来源。自建线把 eBPF 依赖的 `CONFIG_DYNAMIC_FTRACE` 五项 + `CONFIG_DEBUG_INFO_BTF` 写死在自建内核里，构建期逐项断言，实测挂载成功（`eBPF loaded and attached`、6 个 cgroup 程序、`dae0` 建链）；两条官方线用官方镜像自带内核、不编译内核，只能靠 `vmlinux-btf` 包补 BTF，`CONFIG_DYNAMIC_FTRACE` 那几项随官方镜像走、本仓不做断言。
 
 **完整的 CrowdSec LXC 运行期逻辑、网络与防火墙校验、`rootfs-skel` 契约 → [CROWDSEC.md](https://github.com/xiealon/ImmortalWrt-ImageBuilder-25.12/blob/master/CROWDSEC.md)；v.103 起的改动记录 → [CHANGELOG.md](https://github.com/xiealon/ImmortalWrt-ImageBuilder-25.12/blob/master/CHANGELOG.md)**
 
@@ -54,7 +56,17 @@ ImmortalWrt **24.10.x** x86-64 固件构建线：官方 ImageBuilder 直接出�
 immortalwrt/imagebuilder:x86-64-openwrt-${luci_version}
 ```
 
-所以 7 个版本档都能用。没有 `IB_URL`、没有 `PKG_URL`、没有 sha256 固定 —— 这是与 honk 线最大的区别：那条线两个包都在仓库外，内核 hash 一改全部作废。
+所以 7 个版本档都能用。没有 `IB_URL`、没有 `PKG_URL`、没有 sha256 固定 —— 这是与两条自建线最大的区别：那两条线的两个包都在仓库外，内核 hash 一改全部作废。
+
+唯一从仓库外取的是 daed 三件套（`build24.sh` 的 daed 段，从 kenzok8/openwrt-daede 的 Release 下 ipk）：
+
+| 包 | 文件 | 大小 | 说明 |
+|---|---|---|---|
+| `daed` | `daed_2026.11.09-r1_x86_64.ipk` | 26,107,190 B | 主程序，内嵌 Web UI |
+| `luci-app-daede` | `luci-app-daede_1.15-r13_all.ipk` | 99,510 B | LuCI 界面，自带中文 |
+| `vmlinux-btf` | `vmlinux-btf_6.6.151-r1_x86_64.ipk` | 1,541,735 B | BTF 包，必须与 24.10 内核（6.6.151）同版 |
+
+`vmlinux-btf` 的版本在构建期用 `include/kernel-version.mk` 的 `LINUX_VERSION-6.6` 校验，不一致直接 `::error::` + `exit 1` —— 装错版本 daed 的 CO-RE eBPF 校验过不去。取包段会先删掉 store 的 `24-luci-app-dead_1.28-x86-64.run` 解出来的旧 `daed_1.28` ipk，避免同名不同版共存被 opkg 挑错。
 
 ---
 
