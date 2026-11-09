@@ -309,6 +309,33 @@ _pa_repair() {
     [ -z "$(_pa_missing)" ]
 }
 
+# 【2026-11-10.0525】删除重建（用户定：装回失败就删了重装）。
+# 为什么 --force 不够：--force 走 PCR_FORCE=1 -> opkg --force-reinstall，
+# 只按包内容重铺文件、**不动记账**。记账本身坏掉时（包在册但实际不在 /
+# 文件与记账分裂）它会一直报「成功」，复判却依然缺 —— 探针只能反复重试。
+# 删除重建把记账和残留一起清掉，从零装回，是最后一招。
+# 只删主包不删依赖：--force-depends 不连带删依赖（实测删 clashoo 只清 44MB
+# 内核，i18n 不动），避免把别的应用依赖的共享库一起拖走。
+_pa_rebuild() {
+    _prb_n=0
+    for _prb_p in $(_pa_missing); do
+        _prb_n=$((_prb_n + 1))
+        log "重建 $_prb_p（先删除再重装）"
+        opkg remove --force-depends "$_prb_p" >/dev/null 2>&1 ||
+            log "删除 $_prb_p 失败（继续尝试重装，结果以复判为准）"
+        _PA_CACHE=""
+        if _pa_installed "$_prb_p"; then
+            "$_RESTORE" --force "$_prb_p" || log "重建 $_prb_p 失败（强制重装没成功）"
+        else
+            "$_RESTORE" --tree "$_prb_p" || log "重建 $_prb_p 失败（依赖树装回失败）"
+        fi
+    done
+    [ "$_prb_n" -gt 0 ] || log "无需重建（没有「该有却缺失」的应用）"
+    _PA_CACHE=""
+    # 同 _pa_repair：不看删/装的退出码，只认复判。
+    [ -z "$(_pa_missing)" ]
+}
+
 case "${1:---repair}" in
 --check)
     _pa_check && exit 0 || exit 1
@@ -320,8 +347,11 @@ case "${1:---repair}" in
 --repair)
     _pa_repair && exit 0 || exit 1
     ;;
+--rebuild)
+    _pa_rebuild && exit 0 || exit 1
+    ;;
 -*)
-    echo "用法：$0 --check | --list | --repair" >&2
+    echo "用法：$0 --check | --list | --repair | --rebuild" >&2
     exit 2
     ;;
 *)
