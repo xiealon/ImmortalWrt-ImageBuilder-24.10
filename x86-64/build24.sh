@@ -108,6 +108,94 @@ else
     echo "⚪️ 未选择 clashoo"
 fi
 
+# daed：新版 daed 三件套，从 kenzok8/openwrt-daede 的 release 取 ipk。
+#
+# 【2026-11-10】用户定：官方 24.10 线改用新版 daed（本线本来就没有 honk）。
+# 24.10 是 opkg 体系，所以取 ipk：
+#   daed_<ver>_x86_64.ipk               主程序，内嵌 Web UI，约 24.9 MiB
+#   luci-app-daede_<ver>_all.ipk        LuCI 界面（含中文），约 97 KiB
+#   vmlinux-btf_6.6.151-r1_x86_64.ipk   BTF 包，必须与 24.10 内核同版
+#
+# 为什么先清旧的：store 的 24-luci-app-dead_1.28-x86-64.run 会解出 daed_1.28 的 ipk。
+# 同一个 packages/ 目录里留两份同名不同版的 ipk，opkg 挑哪份看目录顺序，
+# 不报错、装完才知道是哪一版 —— 所以先删干净再下新的。
+if echo "$PACKAGES" | grep -q "daed"; then
+    _dd_api="https://api.github.com/repos/kenzok8/openwrt-daede/releases/latest"
+    echo "==> daed: 读取 Release 资产清单"
+    echo "    $_dd_api"
+    _dd_json=$(wget -qO- --timeout=30 --tries=3 "$_dd_api" 2>/dev/null) || _dd_json=""
+    if [ -z "$_dd_json" ]; then
+        echo "::error::daed: 取不到 openwrt-daede Release 资产清单（网络不通或 Release 不存在）"
+        exit 1
+    fi
+
+    for _dd_old in packages/daed_*.ipk packages/luci-app-daed_*.ipk \
+                   packages/luci-app-daede_*.ipk packages/vmlinux-btf_*.ipk; do
+        [ -f "$_dd_old" ] || continue
+        echo "    ✗ 清掉旧包 $(basename "$_dd_old")"
+        rm -f "$_dd_old"
+    done
+
+    _dd_n=0
+    # ---- BTF：必须与目标内核同版，否则 daed 的 CO-RE eBPF 校验过不去 ----
+    _dd_btf_url=$(printf '%s' "$_dd_json" \
+        | grep -oE "\"https://[^\"]*/vmlinux-btf_6\.6\.[0-9]+-r[0-9]+_x86_64\.ipk\"" \
+        | tr -d '"' | sort -V | tail -n1)
+    if [ -z "$_dd_btf_url" ]; then
+        echo "::error::daed: Release 里没有 x86_64 的 vmlinux-btf_6.6.*-r*_x86_64.ipk"
+        exit 1
+    fi
+    _DD_BTF_VER=$(basename "$_dd_btf_url" | sed -n 's/^vmlinux-btf_\(6\.6\.[0-9]*\)-r[0-9]*_x86_64\.ipk$/\1/p')
+    if [ -z "$_DD_BTF_VER" ]; then
+        echo "::error::daed: 解析不出 BTF 版本号（$_dd_btf_url）"
+        exit 1
+    fi
+    _dd_kver=$(sed -n 's/^LINUX_VERSION-6\.6 = //p' \
+        /home/build/immortalwrt/include/kernel-version.mk 2>/dev/null | head -n1)
+    if [ -n "$_dd_kver" ] && [ "$_dd_kver" != "$_DD_BTF_VER" ]; then
+        echo "::error::daed: vmlinux-btf 版本 $_DD_BTF_VER 与目标内核 $_dd_kver 不一致，daed 的 eBPF 校验会失败"
+        exit 1
+    fi
+    echo "    BTF 版本 $_DD_BTF_VER（目标内核 ${_dd_kver:-未知，跳过校验}）"
+    echo "    ↓ $(basename "$_dd_btf_url")"
+    wget -q "$_dd_btf_url" -P /home/build/immortalwrt/packages/ \
+        || { echo "::error::daed: 下载失败 $_dd_btf_url"; exit 1; }
+    _dd_n=$((_dd_n + 1))
+
+    # ---- 主程序 daed：只认 x86_64 ----
+    _dd_url=$(printf '%s' "$_dd_json" \
+        | grep -oE "\"https://[^\"]*/daed_[0-9][^\"]*_x86_64\.ipk\"" \
+        | tr -d '"' | sort -V | tail -n1)
+    if [ -z "$_dd_url" ]; then
+        echo "::error::daed: Release 里没有 daed_*_x86_64.ipk"
+        exit 1
+    fi
+    echo "    ↓ $(basename "$_dd_url")"
+    wget -q "$_dd_url" -P /home/build/immortalwrt/packages/ \
+        || { echo "::error::daed: 下载失败 $_dd_url"; exit 1; }
+    _dd_n=$((_dd_n + 1))
+
+    # ---- LuCI 界面：PKGARCH:=all，只有 _all.ipk 一份 ----
+    _dd_luci=$(printf '%s' "$_dd_json" \
+        | grep -oE "\"https://[^\"]*/luci-app-daede_[0-9][^\"]*_all\.ipk\"" \
+        | tr -d '"' | sort -V | tail -n1)
+    if [ -z "$_dd_luci" ]; then
+        echo "::error::daed: Release 里没有 luci-app-daede_*_all.ipk"
+        exit 1
+    fi
+    echo "    ↓ $(basename "$_dd_luci")"
+    wget -q "$_dd_luci" -P /home/build/immortalwrt/packages/ \
+        || { echo "::error::daed: 下载失败 $_dd_luci"; exit 1; }
+    _dd_n=$((_dd_n + 1))
+
+    echo "✅ daed: $_dd_n 个 ipk 已进 packages/（版本随 Release 走，BTF=$_DD_BTF_VER）"
+    ls -l /home/build/immortalwrt/packages/daed_*.ipk \
+          /home/build/immortalwrt/packages/luci-app-daede_*.ipk \
+          /home/build/immortalwrt/packages/vmlinux-btf_*.ipk 2>/dev/null || true
+else
+    echo "⚪️ 未选择 daed"
+fi
+
 case " $PACKAGES " in
     *" luci-i18n-aria2"*)
         mkdir -p files/aria2
@@ -479,7 +567,7 @@ lxc-unshare lxc-user-nic lxc-usernsexec lxc-wait liblxc rpcd-mod-lxc
 luci-app-lxc luci-i18n-lxc-zh-cn
 smartdns smartdns-ui luci-app-smartdns luci-i18n-smartdns-zh-cn
 mosdns luci-app-mosdns luci-i18n-mosdns-zh-cn v2ray-geoip v2ray-geosite
-daed daed-geoip daed-geosite luci-app-daed luci-i18n-daed-zh-cn vmlinux-btf
+daed luci-app-daede vmlinux-btf
 dae dae-geoip dae-geosite luci-app-dae luci-i18n-dae-zh-cn
 crowdsec crowdsec-firewall-bouncer luci-app-crowdsec-firewall-bouncer
 luci-i18n-crowdsec-firewall-bouncer-zh-cn nftables-json
