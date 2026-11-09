@@ -115,7 +115,18 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-taskplan luci-i18n-taskplan-zh-cn"
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-wechatpush luci-i18n-wechatpush-zh-cn"
 
-CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-i18n-daed-zh-cn"
+# daed（eBPF 代理）：改用新版 daed 三件套，来自 kenzok8/openwrt-daede。
+# 【2026-11-10】用户定：官方 24.10 线改用新版 daed（本线本来就没有 honk）。
+# 原来这里只有 luci-i18n-daed-zh-cn 一条 —— 光有中文语言包，没有本体和界面，
+# 靠 store 的 24-luci-app-dead_1.28-x86-64.run 解出来的旧 ipk 凑数（1.28，很旧，
+# 且和语言包版本对不上）。现在改成 build24.sh 直接从 Release 下这三件：
+#   daed_2026.11.09-r1_x86_64.ipk          26,107,190 B  主程序，内嵌 Web UI
+#   luci-app-daede_1.15-r13_all.ipk            99,510 B  LuCI 界面（含中文）
+#   vmlinux-btf_6.6.151-r1_x86_64.ipk       1,541,735 B  BTF 包，与 24.10 内核同版
+# vmlinux-btf 必须列：daed 的 Makefile 有 +DAED_USE_VMLINUX_BTF:vmlinux-btf，
+# 缺了 make image 直接报找不到；版本还必须等于内核（6.6.151），否则 daed 的
+# CO-RE eBPF 校验过不去。
+CUSTOM_PACKAGES="$CUSTOM_PACKAGES daed luci-app-daede vmlinux-btf"
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-proto-wireguard kmod-wireguard wireguard-tools"
 
