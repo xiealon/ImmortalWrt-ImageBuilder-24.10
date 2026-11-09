@@ -94,9 +94,9 @@ _RESTORE="${RESTORE_BIN:-/usr/sbin/pkg-restore.sh}"
 # 里有没有对应的 apk。两个都 yes 才留在这张表里 —— 只有前者没有后者的包，
 # 判出缺失也装不回来，每轮只是白报一次警。
 #
-# 留下的 12 个包全部 firmware=yes + pkg=yes：
+# 留下的 10 个包全部 firmware=yes + pkg=yes：
 #   clashoo / luci-app-clashoo / luci-i18n-clashoo-zh-cn
-#   daed / daed-geoip / daed-geosite / luci-app-daed / luci-i18n-daed-zh-cn
+#   daed / luci-app-daede / vmlinux-btf
 #   sing-box
 #   adblock / luci-app-adblock / luci-i18n-adblock-zh-cn（2026-11-02 补入，见 _PA_ADBLOCK）
 #
@@ -122,7 +122,17 @@ _RESTORE="${RESTORE_BIN:-/usr/sbin/pkg-restore.sh}"
 #   libopenssl3        固件库有、包库无 → 装不回；且它是全系统的 TLS 底座，
 #                      不属于某一个应用的依赖
 _PA_CLASHOO="clashoo luci-app-clashoo luci-i18n-clashoo-zh-cn"
-_PA_DAED="daed daed-geoip daed-geosite luci-app-daed luci-i18n-daed-zh-cn"
+# 【2026-11-10】改用 kenzok8 的新版 daed（用户定），保护组随之换成三件：
+#   daed          主程序，/usr/bin/daed + /etc/init.d/daed，内嵌 Web UI
+#   luci-app-daede LuCI 界面（1.15-r13，自带中文，没有单独的 i18n 包）
+#   vmlinux-btf   BTF 包，与 24.10 内核同版（6.6.151），daed 的 Depends 里有它
+# 三件都由 build24.sh 的 daed 段下载进 packages/，固件打包时一起进
+# /rom/root/pkg-cache，所以判出缺失时能从本地装回，不需要联网。
+#
+# 与旧版的差别：daed-geoip / daed-geosite 两个软链接包是官方 feed 的东西，
+# kenzok8 的 daed 直接依赖 v2ray-geoip / v2ray-geosite（_PA_GEO 已覆盖），
+# 不再有独立的链接包，原来那两条「链接可读」判据一并删除。
+_PA_DAED="daed luci-app-daede vmlinux-btf"
 # sing-box 是通用代理内核，原挂在 ssrp 组里，现在单独一组。
 # 它的 kmod 依赖（inet-diag / netlink-diag / tun）同样归 --deps 管。
 _PA_COMMON="sing-box"
@@ -171,10 +181,7 @@ _PA_GEO="v2ray-geoip v2ray-geosite"
 #   · 万一真的断链触发装回，装的是 daed-geoip（已在册 → 装包是空操作），不会把
 #     用户刚升级的 v2ray-geoip 拽回旧版；而真被人 force-remove 掉的那种情况，
 #     装回旧版也比彻底没有规则集强。
-_PA_LINK_DAED_GEOIP=/usr/share/daed/geoip.dat
-_PA_LINK_DAED_GEOSITE=/usr/share/daed/geosite.dat
-
-_PA_LIST="${CS_PROBE_APPS:-$_PA_CLASHOO $_PA_DAED $_PA_COMMON $_PA_GEO $_PA_ADBLOCK}"
+_PA_LIST="${CS_PROBE_APPS:-$_PA_CLASHOO $_PA_GEO $_PA_DAED $_PA_COMMON $_PA_ADBLOCK}"
 
 log() { printf '[APP] %s\n' "$*"; }
 
@@ -202,15 +209,14 @@ _pa_should() {
     return 1
 }
 
-# 已装包的「运行数据还在吗」补充判据（v.180.167）。
-# 只对 daed 的两个 geo 包生效：它们的运行数据是软链接，包在册不等于数据在。
-# 其余包没有这种「包在、数据另存」的结构，直接算好。
+# 已装包的「运行数据还在吗」补充判据。
+# 【2026-11-10】改用 kenzok8 的 daed 后不再有 daed-geoip / daed-geosite 两个
+# 软链接包（它直接依赖 v2ray-geoip / v2ray-geosite，由 _PA_GEO 包级判），
+# 所以这个函数现在对所有包都返回「数据在」。保留函数壳是因为 _pa_missing /
+# _pa_list / _pa_repair 三处都在调它，删了要改三处；等哪天真有别的包需要
+# 「包在、数据另存」的判据时，在这里加 case 分支即可。
 _pa_data_ok() {
-    case "$1" in
-    daed-geoip)   [ -r "$_PA_LINK_DAED_GEOIP" ] ;;
-    daed-geosite) [ -r "$_PA_LINK_DAED_GEOSITE" ] ;;
-    *)            return 0 ;;
-    esac
+    return 0
 }
 
 # 【v.180.192】包在册、关键文件被删 —— 判运行侧文件，不判 /rom：
