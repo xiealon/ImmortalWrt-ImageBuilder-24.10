@@ -3,7 +3,7 @@
 #
 # 为什么有这支脚本（用户 2026-10-29 定，判据取向见 crowdsec-lxc-probe.sh L219-231）：
 #   探针只做两件事 —— 探测 + 拉脚本，自己不动手装包。
-#   daed / clashoo 这两个应用不像 smartdns 那样接管 53
+#   honk / clashoo 这两个应用不像 smartdns 那样接管 53
 #   （ssrp 已于 v.180.165 整组移除，理由见清单处的说明），
 #   所以不判进程、不判端口，只判包在不在册；缺了由本脚本装回。
 #   【v.180.164】判定粒度从「主程序一个包」扩到「主程序 + 依赖内核 + LuCI 界面」：
@@ -19,40 +19,52 @@
 #   pkg-restore-apps.sh [--repair]  装回缺的那些，再复判一次
 #                                   0 = 全部在位；1 = 仍有缺（或装不上）
 #
-# 判据主体是包管理器认不认。本版写死 opkg（24.10 线只有 opkg）：opkg list-installed。
-# 【v.180.167】唯一例外：daed-geoip / daed-geosite 的运行数据是软链接，包在册
-# 但链接断了同样算「缺失」—— 详见 _pa_data_ok 上方的说明。
+# 【2026-11-10】adblock 整组移出本脚本，独立成 /usr/sbin/adblock/：
+#   它的恢复 / 配置 / 规则文件 / 删除重建四项都由那边按步骤管，
+#   本脚本只管代理内核（clashoo / daed / sing-box）与 geo 数据。
+#   移除理由：adblock 是本机唯一允许「删了重装」的包，而那条链要整链删除
+#   （单独 del 主包会被 luci-i18n 的反向依赖挡住），代码形态与本脚本的
+#   逐包恢复不同，混在一处两套白名单会互相干扰。
+#
+# 判据主体是包管理器认不认。本版写死 apk（25.12 线只有 apk）：apk info -e。
+# 【2026-11-02】原 daed-geoip / daed-geosite 的软链接例外随 daed 一并移除
+# （25.12 线改用 honk）；honk 的规则集由 native_api 自己下载到 data_dir，
+# 不依赖 /usr/share 下的软链接，包在册即视为数据齐备。
 #   【v.180.192】补齐文件级判据（用户 2026-10-30 定）。原来这里写的是「不看文件清单」，
 #   理由是清单随版本漂 / 文件缺失 ≠ 功能缺失 / 两判据混用会死循环。这三条在
 #   「包完整在册、二进制被单独删掉」这种形态上都不成立：
-#     · 清单随版本漂 —— 读的是 /rom 侧固件原始清单，不随运行侧升级漂；
+#     · 清单随版本漂 —— 读的是 /rom 侧固件原始清单（apk 域：/rom/lib/apk/packages），
+#       不随运行侧升级漂；
 #     · 文件缺失 ≠ 功能缺失 —— 这里只筛「可执行 / init / 共享库」，缺了包一定跑不起来；
 #       /usr/share 与 /etc/config 一律不看（用户改配置、删规则集不算坏）；
 #     · 混用会死循环 —— 不会：包级先判「该不该有」，文件级只在「包在册」之后补一刀，
 #       判定顺序单向；恢复动作仍只有一处（--tree → pkg-restore.sh 内有同源复检）。
 #   真实动机：clashoo 包里装的是 /usr/bin/mihomo 与 /usr/bin/clash-meta，包名与二进制名
 #   毫无关系。只判包名时这两个被删，--check 返回 0、探针 appbad 恒为 0 ——
-#   功能已死，日志全绿。2026-10-30 真机复现（192.168.1.201）：
+#   功能已死，日志全绿。24.10 线 2026-10-30 真机复现（192.168.1.201）：
 #   把包内二进制单独删掉后，--check 仍返回 0、探针 appbad 恒为 0。
 #   覆盖范围（各包落在判据内的文件）：
 #     clashoo           /usr/bin/mihomo /usr/bin/clash-meta /etc/init.d/clashoo
-#     daed              /usr/bin/daed /etc/init.d/daed
+#     honk              /usr/bin/honk-core /etc/init.d/honk
 #     sing-box          /usr/bin/sing-box /etc/init.d/sing-box
+#   25.12 的清单格式相同（一行一个绝对路径），但未在 25.12 新机上逐包复测路径覆盖率。
 #   LuCI 壳与 i18n（6 个包）的文件都在 /usr/share、/usr/lib/lua，判据内 0 行 → 恒放行，
 #   仍只靠记账判。这是有意的：那类文件删了顶多界面缺项，不会像二进制那样静默失去功能。
 #
 # 【关键】「该不该有」的门槛：只恢复固件里本来就带的那个应用。
-#     · /rom/usr/lib/opkg/info/<包>.list —— 固件里装过它才有这份清单，
-#             而且是只读基底，opkg remove 删不掉（运行侧那份会被删，不能用来判）
-#     · /rom/root/pkg-cache/<包>_*.ipk —— build24.sh 收进固件的那批包库
-#   两处都没有 → 这台机器的固件没带这个应用 → 什么都不做，也不报错。
+#   否则一台根本没装 honk 的机器，探针每轮都判「缺」、每轮装一次，装上了再被
+#   用户卸掉，又装 —— 就不是修复是强加。判据取 /rom 侧留下的痕迹（apk 域）：
+#     · /rom/lib/apk/db/installed —— 固件出厂的已安装库，P:<包名> 一行一个
+#   不准拿 /rom/root/apk-cache/<包>-*.apk 当判据：那是兜底包库，收的包远多于
+#   固件实际安装的，会把「有包但没装」判成「该有」（v.180.165 真机复现过）。
+#   一处都没有 → 这台机器的固件没带这个应用 → 什么都不做，也不报错。
 #
 # 环境变量：
 #   CS_PROBE_APPS  应用（包名）清单，空格分隔。默认见 _PA_LIST
 #   ROMDIR         只读基座，默认 /rom
 #   RESTORE_BIN    装包执行体，默认 /usr/sbin/pkg-restore.sh
 #
-# 退出码：0 / 1 / 2（2 用于「判断不了」：opkg 不在，判不了 ≠ 包丢了）
+# 退出码：0 / 1 / 2（2 用于「判断不了」：apk 不在，判不了 ≠ 包丢了）
 
 set -u
 ROMDIR="${ROMDIR:-/rom}"
@@ -69,12 +81,11 @@ _RESTORE="${RESTORE_BIN:-/usr/sbin/pkg-restore.sh}"
 #   ③ LuCI 界面（luci-app-* / luci-i18n-*）—— 少了用户看不见入口，等同于坏了
 #
 #   clashoo 组：内核就在主包里（control: Provides: mihomo, clash-meta，Installed-Size 46.5MB）
-#   daed 组：  eBPF 程序，vmlinux-btf 是运行时前提，缺了 daed 直接起不来
-#   daed 组：  geo 数据包是规则来源，缺了 daed 空转
+#   honk 组：  eBPF 程序，vmlinux-btf 是运行时前提，缺了 honk-core 直接起不来
 #   ssrp 组：已整组移除，见下方 v.180.165 说明
 #
 # 【v.180.165】ssrp 组整组删除（用户 2026-10-29 定）。理由两条：
-#   ① daed 已经能替代它，没有必要再维护一套 ssr-plus；
+#   ① honk 已经能替代它，没有必要再维护一套 ssr-plus；
 #   ② ssr-plus 的依赖链太长 —— xray-core / xray-plugin / v2ray-plugin /
 #      三套 shadowsocksr-libev / trojan-plus / tuic / shadow-tls / naiveproxy /
 #      simple-obfs-client，每轮 _pa_missing 都要逐包问一次包管理器，
@@ -94,11 +105,21 @@ _RESTORE="${RESTORE_BIN:-/usr/sbin/pkg-restore.sh}"
 # 里有没有对应的 apk。两个都 yes 才留在这张表里 —— 只有前者没有后者的包，
 # 判出缺失也装不回来，每轮只是白报一次警。
 #
-# 留下的 10 个包全部 firmware=yes + pkg=yes：
+# 留下的 14 个包全部 firmware=yes + pkg=yes：
 #   clashoo / luci-app-clashoo / luci-i18n-clashoo-zh-cn
 #   daed / luci-app-daede / vmlinux-btf
 #   sing-box
-#   adblock / luci-app-adblock / luci-i18n-adblock-zh-cn（2026-11-02 补入，见 _PA_ADBLOCK）
+#   v2ray-geoip / v2ray-geosite（2026-11-02 补入，只判包不判文件，见 _PA_GEO）
+#   （adblock / luci-app-adblock / luci-i18n-adblock-zh-cn 三包 2026-11-10 移出本脚本，
+#     归 /usr/sbin/adblock/ 独立管理；包库里它们的 apk 照旧收在 build25.sh 的 _AK_WANT，
+#     移除只是换了管它的脚本，不是取消保护）
+#
+# vmlinux-btf 为什么也进 daed 组（2026-11-10）：
+#   daed 的 Makefile 写着 +DAED_USE_VMLINUX_BTF:vmlinux-btf，包内 Depends
+#   有它。删掉之后 daed 的依赖链就断，apk 任何一次操作都可能顺手把 daed 带走。
+#   它同时是哨兵：装的是与内核同版的 BTF（6.12.103），启动校验读的就是它；
+#   版本对不上时 daed 起不来，所以它在册 = 「BTF 与内核配套」这件事成立。
+#   恢复走 _pr_tree 从 /rom 拷文件，不需要 apk 源，所以保护是真的生效。
 #
 # 内核模块全部移出本表，改由 pkg-restore.sh --deps 做文件级恢复。
 # 原因是决定性的（2026-10-29 实测）：kmod-* 在固件出厂库里（P:kmod-tun 命中），
@@ -107,7 +128,10 @@ _RESTORE="${RESTORE_BIN:-/usr/sbin/pkg-restore.sh}"
 # 形态，apk info -e 照样返回成功，包级判据根本看不见。
 # 所以交给 --deps：清单不写死，直接读 /rom/lib/apk/packages/<包>.list，
 # 从 /rom 逐文件拷回。9 个 kmod 包的 26 个 .ko 与 9 个 modules.d 配置、
-# 以及 v2ray-geoip / v2ray-geosite 的两个 .dat 都在里面（共 18 包 / 72 文件）。
+# 以及 v2ray-geoip / v2ray-geosite 的 3 条路径都在里面（共 18 包 / 73 条，
+# 2026-11-02 真机 --deps --list 实测；其中 /usr/share/xray/geosite.dat 是
+# 指向 ../v2ray/geosite.dat 的软链接，补回时按链接重建，不做 cp 实体化）。
+# geo 两个包同时也在本文件的 _PA_GEO 里（包级）—— 两条通道分工不同，见 _PA_GEO 说明。
 # 范围只有应用要用的这些：不含内核本体（坏了重刷固件），也不含 /etc/config/
 # （UCI 配置归 bootstrap 管，见 pkg-restore.sh v.180.181 说明）。
 #
@@ -122,74 +146,63 @@ _RESTORE="${RESTORE_BIN:-/usr/sbin/pkg-restore.sh}"
 #   libopenssl3        固件库有、包库无 → 装不回；且它是全系统的 TLS 底座，
 #                      不属于某一个应用的依赖
 _PA_CLASHOO="clashoo luci-app-clashoo luci-i18n-clashoo-zh-cn"
-# 【2026-11-10】改用 kenzok8 的新版 daed（用户定），保护组随之换成三件：
+# 【2026-11-10】官方线改用 daed（用户定），保护组整体换过来，三件：
 #   daed          主程序，/usr/bin/daed + /etc/init.d/daed，内嵌 Web UI
-#   luci-app-daede LuCI 界面（1.15-r13，自带中文，没有单独的 i18n 包）
-#   vmlinux-btf   BTF 包，与 24.10 内核同版（6.6.151），daed 的 Depends 里有它
-# 三件都由 build24.sh 的 daed 段下载进 packages/，固件打包时一起进
-# /rom/root/pkg-cache，所以判出缺失时能从本地装回，不需要联网。
-#
-# 与旧版的差别：daed-geoip / daed-geosite 两个软链接包是官方 feed 的东西，
-# kenzok8 的 daed 直接依赖 v2ray-geoip / v2ray-geosite（_PA_GEO 已覆盖），
-# 不再有独立的链接包，原来那两条「链接可读」判据一并删除。
+#   luci-app-daede LuCI 界面（kenzok8 的 1.15-r13，自带中文，没有单独 i18n 包）
+#   vmlinux-btf   BTF 包，与内核同版（6.12.103），daed 的 Depends 里有它
+# 三件都在包库 /rom/root/apk-cache 里 —— build25.sh 的 daed 段下载、
+# 构建期断言 _ak_need_daed 也会在打包前核实一遍，所以探针判出缺失时
+# 能从本地装回，不需要联网。
 _PA_DAED="daed luci-app-daede vmlinux-btf"
+# 【2026-11-02】geo 数据单独成组：包级判据（apk info -e），不判文件。
+#
+# 这一组负责的只是「包被人 apk del 掉」——装回时连文件带记账一起回来。
+# 「包还在、.dat 被删」是另一种故障，归 pkg-restore.sh 的 --deps 文件级通道，
+# 由探针 _kmods_watch 连续 N 轮缺失后自动从 /rom 拷回。两条合起来才叫
+# 「删了还能自己长回来」，用户 2026-11-02 明确要求要有这一层保障。
+#
+# 为什么不在这里判文件：_pa_files_ok 的 case 只认 /usr/bin /usr/sbin
+# /etc/init.d /lib/*.so*，而 geo 两包的文件全在 /usr/share/v2ray（实测
+# v2ray-geoip.list 只有 1 行 /usr/share/v2ray/geoip.dat）。所以这一组
+# 天然只判「包在册」，不会因为 .dat 新旧去动任何字节 —— 用户
+# `apk add --upgrade v2ray-geoip` 换新数据后，这里永远判在位。
+_PA_GEO="v2ray-geoip v2ray-geosite"
 # sing-box 是通用代理内核，原挂在 ssrp 组里，现在单独一组。
 # 它的 kmod 依赖（inet-diag / netlink-diag / tun）同样归 --deps 管。
 _PA_COMMON="sing-box"
-# 【2026-11-02】adblock 组（用户当日定：先留着，并且保护起来）。
-# 三个包是一条依赖链，只写 i18n 也会把 adblock 本体拉进来，所以整链一起护。
+# 【2026-11-10】只判包级、不判文件的组（用户定）。
+# clashoo / daed / honk 是三个互斥的代理内核（同时只能开一个），它们的状态
+# 由用户导入订阅后生成在 /etc/clashoo、/etc/honk 等目录，**不在任何包的
+# 文件清单里**。用文件级判据去判它们，只会把「用户还没配置」误报成「包坏了」，
+# 进而触发重装 —— 而重装既补不回配置（配置不是包内容），又白折腾一次服务。
 #
-# 本组能判两层：
-#   ① 包被 opkg remove → _pa_should 命中出厂 P:adblock → 缺失 → 从包库装回；
-#   ② 包在、文件被删   → _pa_files_ok 判 /etc/init.d/adblock 与 /usr/bin/adblock.sh。
+# 2026-11-10 真机证据：clashoo 装好但 /etc/clashoo/config.yaml 不存在，
+# runtime_state 写的是 health_detail=preflight:config_missing，
+# opkg remove + install 之后 config.yaml 依然不存在 —— 这证明配置与包正交。
 #
-# 刻意不把 adblock 三包加进 pkg-restore.sh 的 --deps 文件级通道：
-# 那边是整份 .list 逐路径从 /rom 拷回，会把 /etc/adblock/adblock.allowlist、
-# blocklist、custom.feeds 这些用户自己加的规则按出厂空白版覆盖掉 ——
-# 与 /etc/config 全目录排除是同一条理由（保护动作制造它要防的故障）。
-_PA_ADBLOCK="adblock luci-app-adblock luci-i18n-adblock-zh-cn"
-# 【2026-11-03】geo 数据包单独成组（与 25.12 线对齐）：包级判据，只判包不判文件。
-#
-# 这一组负责的只是「包被人 opkg remove 掉」—— 装回时连文件带记账一起回来。
-# 「包还在、.dat 被删」是另一种故障，归 pkg-restore.sh 的 --deps 文件级通道，
-# 由探针 _kmods_watch 连续 N 轮缺失后自动从 /rom 拷回。两条合起来才叫
-# 「删了还能自己长回来」。
-#
-# 为什么不在这里判文件：_pa_files_ok 的 case 只认 /usr/bin /usr/sbin
-# /etc/init.d /lib/*.so*，而 geo 两包的文件全在 /usr/share/v2ray。
-# 所以这一组天然只判「包在册」，不会因为 .dat 新旧去动任何字节 ——
-# 用户换新数据后，这里永远判在位。
-#
-# 装得回来的前提已核实：build24.sh 的 _PC_WANT 里已有
-# v2ray-geoip / v2ray-geosite，包库 /rom/root/pkg-cache 里就有对应 ipk，
-# 判出缺失能装回，不是空头支票。
-_PA_GEO="v2ray-geoip v2ray-geosite"
+# 结论：这三个组只走 _pa_installed（opkg list-installed），文件级一律放行。
+# 二进制真被删了，重装包自然连文件一起回来；配置文件不被任何自动动作碰。
+_PA_HONK="honk luci-app-honk luci-i18n-honk-zh-cn"
+_PA_PKGONLY="$_PA_CLASHOO $_PA_DAED $_PA_HONK"
 
-# 【v.180.167】daed 的 geo 数据是软链接，真实文件由 v2ray-geoip / v2ray-geosite 提供：
-#   /usr/share/daed/geoip.dat    -> ../v2ray/geoip.dat
-#   /usr/share/daed/geosite.dat  -> ../v2ray/geosite.dat
-# 用户 2026-10-29 实测确认后定：apk del --force-depends v2ray-geoip 会让这两个链接
-# 断掉，而 daed-geoip 包本身仍在册 —— 只判包名完全看不到这种「包在、数据没了」的
-# 形态，daed 会在启动时静默失去规则集。所以对这两个包再加一条「链接可读」判据。
-#
-# 为什么升级 v2ray-geoip 不会误判（用户最关心的那点）：
-#   · 软链接指向的是**路径**而不是 inode；apk 升级是原地替换
-#     /usr/share/v2ray/geoip.dat，该路径全程存在 → 判据恒真，不会因为换了新版
-#     就判成断链。
-#   · 即使某一瞬文件正在被替换，探针这边也要连续 3 轮（60s × 3 = 180s）才动作，
-#     毫秒级的窗口凑不满 3 轮，不会触发装回。
-#   · 万一真的断链触发装回，装的是 daed-geoip（已在册 → 装包是空操作），不会把
-#     用户刚升级的 v2ray-geoip 拽回旧版；而真被人 force-remove 掉的那种情况，
-#     装回旧版也比彻底没有规则集强。
-_PA_LIST="${CS_PROBE_APPS:-$_PA_CLASHOO $_PA_GEO $_PA_DAED $_PA_COMMON $_PA_ADBLOCK}"
+# 【2026-11-02】daed 在 25.12 线已被 honk 取代（用户定），原来的 geo 软链接判据一并删除：
+#   honk 的规则集不走 /usr/share/daed/*.dat 软链接，而是按 native_api.geosite_download_url /
+#   geoip_download_url 自己下到 data_dir（默认 /etc/honk/data），包在册即认定数据齐备。
+#   honk 是官方 daeuniverse 源的包，预装进固件后 /rom/lib/apk/db/installed 有 P:honk，
+#   _pa_should 照常命中；被 force-remove 时同样能判出来。
+
+# 【2026-11-10】_PA_HONK 并入清单：_PA_PKGONLY 原本写了 honk 三包却不进 _PA_LIST，
+# 等于「判据写了、范围没进去」。这些包只有对应变体才有，靠 _pa_should 按
+# /rom/usr/lib/opkg/info/<包>.list 过滤 —— 没有该包的线上自动跳过，不误报。
+_PA_LIST="${CS_PROBE_APPS:-$_PA_CLASHOO $_PA_GEO $_PA_DAED $_PA_COMMON $_PA_HONK}"
 
 log() { printf '[APP] %s\n' "$*"; }
 
-# 【2026-10-31.0256】_pa_pm 删除：opkg 是 24.10 的系统包管理器，必然在位（用户 2026-10-31 定）。
+# 【2026-10-31.0256】_pa_pm 删除：apk 是 25.12 的系统包管理器，必然在位（用户 2026-10-31 定）。
 # 原来那层 command -v 探测只会产出一个永不触发的 exit 2。
 
-# 已装包名表缓存：一次全表扫描，四次判定共用（同 pkg-restore.sh 的 _PR_CACHE）
-_PA_CACHE=""
+# 24.10 线才需要 _PA_CACHE（opkg list-installed 是全表扫描，缓存后只跑一次）；
+# 25.12 的 apk info -e 直接问包数据库，不需要缓存，本文件不保留这个变量。
 _pa_installed() {
     if [ -z "$_PA_CACHE" ]; then
         _PA_CACHE=$(opkg list-installed 2>/dev/null | sed -n 's/ - .*//p')
@@ -197,10 +210,31 @@ _pa_installed() {
     printf '%s\n' "$_PA_CACHE" | grep -qx "$1"
 }
 
+# 【2026-11-10】从本地仓库直装单个包，不主动补依赖树。
+# 为什么不用 pkg-restore.sh --tree：那条会顺手把整棵依赖装回来，属于 --deps
+# 的职责；apps 这层只回答「这个包该在而它不在」。依赖真缺时 apk 会拒装并说明
+# 缺哪个，等 --deps 补齐后这里自然就过去了。
+#
+# 【必须注意】rc 只能这样取。2026-11-10 实测踩过坑：
+#     apk add ... 2>&1 | tail -12
+#     echo "RC=$?"        ← 拿到的是 tail 的 0，apk 明明失败却当成功
+# 差点在设备上把 smartdns 删掉后装不回来。
+_pa_add_local() {
+    # 24.10 侧 opkg：--force 就是 opkg install --force-reinstall，只重装这一个包，
+    # 不会像 --tree 那样把整棵依赖树拉回来。所以先走它。
+    if "$_RESTORE" --force "$1" >/dev/null 2>&1; then
+        return 0
+    fi
+    # 兜底：本地 pkg-cache 里的 ipk 直装
+    _pal_ipk=$(ls "$ROMDIR/root/pkg-cache/$1"_*.ipk 2>/dev/null | head -n1)
+    [ -n "$_pal_ipk" ] || return 1
+    opkg install --force-reinstall "$_pal_ipk" >/dev/null 2>&1
+}
+
 # 固件里本来就有这个应用吗 —— 见文件头「该不该有」的门槛。
-# 本版只看 opkg 侧的两处痕迹；apk 的两条判据随版本拆分一并删除。
+# 本版只看 apk 的出厂已装库；opkg 的 .list 判据随版本拆分一并删除。
 _pa_should() {
-    # 固件装过才有 info/<包>.list。只读基底，opkg remove 删不掉运行侧那份。
+    # 固件装过才有 info/<包>.list。只读基座，opkg remove 删不掉运行侧那份。
     [ -f "$ROMDIR/usr/lib/opkg/info/$1.list" ] && return 0
     # 构建时直接铺进固件、没走 opkg 的应用，只在包库里留了 ipk。
     for _pa_f in "$ROMDIR/root/pkg-cache/$1"_*.ipk; do
@@ -209,23 +243,32 @@ _pa_should() {
     return 1
 }
 
-# 已装包的「运行数据还在吗」补充判据。
-# 【2026-11-10】改用 kenzok8 的 daed 后不再有 daed-geoip / daed-geosite 两个
-# 软链接包（它直接依赖 v2ray-geoip / v2ray-geosite，由 _PA_GEO 包级判），
-# 所以这个函数现在对所有包都返回「数据在」。保留函数壳是因为 _pa_missing /
-# _pa_list / _pa_repair 三处都在调它，删了要改三处；等哪天真有别的包需要
-# 「包在、数据另存」的判据时，在这里加 case 分支即可。
+# 已装包的「运行数据还在吗」补充判据（v.180.167）。
+# 原来只对 daed 的两个 geo 包生效（软链接断链要算缺失）。
+# 【2026-11-02】daed 在 25.12 线被 honk 取代，本线已无「包在、数据另存」的包，
+# case 里不再有任何具体分支；函数保留是为了调用点不用改，也方便日后加新判据。
 _pa_data_ok() {
-    return 0
+    case "$1" in
+    *)            return 0 ;;
+    esac
 }
 
 # 【v.180.192】包在册、关键文件被删 —— 判运行侧文件，不判 /rom：
 # 要问的是「现在能不能跑」，/rom 里的副本永远在，拿它当判据恒真。
-# 清单取 /rom 侧固件原始那份：opkg remove 会把运行侧 /usr/lib/opkg/info 的 .list
-# 一起删掉，只剩只读基底还留着出厂记录。清单本身不在 → 放行（判不了，别乱报）。
+# 清单取 /rom 侧固件原始那份（apk 域 /rom/lib/apk/packages/<包>.list，一行一路径）：
+# 运行侧的 apk 记录是二进制的 installed.adb，取不出一行一路径的清单，正好只用 /rom 那份。
+# 清单本身不在 → 放行（判不了，别乱报）。
 # 与 pkg-restore.sh 的 _pr_files_ok 同源。两脚本各自独立部署（探针直接 exec 本脚本），
 # 没有共享库；重复的只是 6 行 case，比引入一层 source 稳。
+#
+# case 只认程序文件（/usr/bin /usr/sbin /etc/init.d /lib/*.so*），
+# **不含 /usr/share** —— 这正是 _PA_GEO 想要的：geo 数据在 /usr/share/v2ray/*.dat，
+# 包里任何一个程序文件在册就判在位，数据新旧、在不在都不影响判断。
 _pa_files_ok() {
+    # 【2026-11-10】代理内核只判包级，见 _PA_PKGONLY 说明。
+    case " $_PA_PKGONLY " in
+    *" $1 "*) return 0 ;;
+    esac
     _paf_l="$ROMDIR/usr/lib/opkg/info/$1.list"
     [ -f "$_paf_l" ] || return 0
     while IFS= read -r _paf_f; do
@@ -281,7 +324,7 @@ _pa_repair() {
     for _pa_p in $(_pa_missing); do
         _pa_n=$((_pa_n + 1))
         log "装回 $_pa_p"
-        # 【2026-11-09】按形态分两条路（与 25.12 线对齐）。原来一律走 --tree，看似通用，实际对
+        # 【2026-11-09】按形态分两条路。原来一律走 --tree，看似通用，实际对
         # 「包在册、只有文件缺失」这种形态是空转：
         #   --tree -> pkg-restore.sh 的 _pr_pkg -> 先判 _pr_installed（包在册=真）
         #   -> 再判 _pr_files_ok，而它的 case 只认 /usr/bin /usr/sbin /etc/init.d
@@ -289,7 +332,7 @@ _pa_repair() {
         #   -> 打「已安装，跳过」-> 返回 0，一个字节没写。
         # 所以：
         #   ① 包不在册 -> --tree，连依赖一起装；
-        #   ② 包在册、判据没过 -> --force，直连 PCR_FORCE=1 -> opkg --force-reinstall，
+        #   ② 包在册、判据没过 -> --force，直连 PCR_FORCE=1 -> apk fix，
         #      按包内容重装，文件与软链接都会重建。
         if _pa_installed "$_pa_p"; then
             if "$_RESTORE" --force "$_pa_p"; then
@@ -297,42 +340,15 @@ _pa_repair() {
             else
                 log "装回失败 $_pa_p（强制重装没成功，本地包库可能没有它）"
             fi
-        elif "$_RESTORE" --tree "$_pa_p"; then
+        elif _pa_add_local "$_pa_p"; then
             log "装回完成 $_pa_p"
         else
-            log "装回失败 $_pa_p（本地包库没有它，或包管理器不可用）"
+            log "装回失败 $_pa_p（本地包库没有它，或依赖缺失待 --deps 补齐）"
         fi
     done
     [ "$_pa_n" -gt 0 ] || log "无需装回（没有「该有却缺失」的应用）"
-    # 装完必须重判：清缓存，让刚装上的包体现在下一次判定里
+    # 装完必须重判。opkg 侧 _pa_installed 有缓存，先清掉再算。
     _PA_CACHE=""
-    [ -z "$(_pa_missing)" ]
-}
-
-# 【2026-11-10.0525】删除重建（用户定：装回失败就删了重装）。
-# 为什么 --force 不够：--force 走 PCR_FORCE=1 -> opkg --force-reinstall，
-# 只按包内容重铺文件、**不动记账**。记账本身坏掉时（包在册但实际不在 /
-# 文件与记账分裂）它会一直报「成功」，复判却依然缺 —— 探针只能反复重试。
-# 删除重建把记账和残留一起清掉，从零装回，是最后一招。
-# 只删主包不删依赖：--force-depends 不连带删依赖（实测删 clashoo 只清 44MB
-# 内核，i18n 不动），避免把别的应用依赖的共享库一起拖走。
-_pa_rebuild() {
-    _prb_n=0
-    for _prb_p in $(_pa_missing); do
-        _prb_n=$((_prb_n + 1))
-        log "重建 $_prb_p（先删除再重装）"
-        opkg remove --force-depends "$_prb_p" >/dev/null 2>&1 ||
-            log "删除 $_prb_p 失败（继续尝试重装，结果以复判为准）"
-        _PA_CACHE=""
-        if _pa_installed "$_prb_p"; then
-            "$_RESTORE" --force "$_prb_p" || log "重建 $_prb_p 失败（强制重装没成功）"
-        else
-            "$_RESTORE" --tree "$_prb_p" || log "重建 $_prb_p 失败（依赖树装回失败）"
-        fi
-    done
-    [ "$_prb_n" -gt 0 ] || log "无需重建（没有「该有却缺失」的应用）"
-    _PA_CACHE=""
-    # 同 _pa_repair：不看删/装的退出码，只认复判。
     [ -z "$(_pa_missing)" ]
 }
 
@@ -347,11 +363,8 @@ case "${1:---repair}" in
 --repair)
     _pa_repair && exit 0 || exit 1
     ;;
---rebuild)
-    _pa_rebuild && exit 0 || exit 1
-    ;;
 -*)
-    echo "用法：$0 --check | --list | --repair | --rebuild" >&2
+    echo "用法：$0 --check | --list | --repair" >&2
     exit 2
     ;;
 *)
