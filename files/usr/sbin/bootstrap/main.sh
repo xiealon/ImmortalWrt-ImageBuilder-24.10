@@ -27,99 +27,10 @@ if [ -z "${_BS_DEPS_LOADED:-}" ]; then
     _BS_DEPS_LOADED=1
 fi
 
-_pkgcache_resolve() {
-    for _pr_d in "$PKG_CACHE_RO" "$PKG_CACHE"; do
-        [ -n "$_pr_d" ] || continue
-        [ -f "$_pr_d/$_PKG_IDX" ] || continue
-        _PKG_CACHE_ACT="$_pr_d"
-        return 0
-    done
-    _PKG_CACHE_ACT=""
-    return 1
-}
-
-_pkgcache_ready() {
-    _pkgcache_resolve || return 1
-    ls "$_PKG_CACHE_ACT"/*."$_PKG_EXT" >/dev/null 2>&1 || return 1
-    return 0
-}
-
-
-_pkgcache_install() {
-    # 【v.180.133】优先交给独立脚本 pkg-cache-restore.sh：它自己会先按
-    # resolve -> 挂源 -> 铺索引 的顺序把前置做好，再装 —— 顺序不再依赖调用方。
-    # 下面这段内置实现保留为兜底：老固件里没有那个脚本，行为必须完全不变。
-    if [ -x "$SROOT/usr/sbin/pkg-cache-restore.sh" ]; then
-        if "$SROOT/usr/sbin/pkg-cache-restore.sh" "$1" >/dev/null 2>&1; then
-            log "[PKG] 经 pkg-cache-restore.sh 装回：$1"
-            return 0
-        fi
-        log "[PKG] pkg-cache-restore.sh 未成功：$1，回退内置实现"
-    fi
-    # 【v.180.198】原来这里分 apk / opkg 两路；本仓库固定 opkg，
-    # apk 那一路（_pkgcache_install_apk）整段删除。
-    _pci_pkg="$1"
-    _pkgcache_ready || return 1
-    # 【2026-10-31.0256】opkg 必在，写死不探测。
-    # 已经装着的就跳过：没坏的东西不该被 --force-reinstall 重写一遍
-    # 【v.180.161】PCR_FORCE=1 时不跳：调用方已确认文件真的不在，而记账还在。
-    if [ "${PCR_FORCE:-0}" != "1" ] \
-       && opkg list-installed 2>/dev/null | grep -q "^$_pci_pkg "; then
-        return 0
-    fi
-    # ① 绝对路径直装。用 ls 匹配而不是猜文件名：版本号里带 r 修订，猜不准
-    _pci_ipk=$(ls "$_PKG_CACHE_ACT/${_pci_pkg}"_*.ipk 2>/dev/null | head -n1)
-    if [ -n "$_pci_ipk" ]; then
-        if opkg install --force-reinstall "$_pci_ipk" >/dev/null 2>&1; then
-            log "[PKG] 本地 ipk 直装成功：$_pci_pkg（opkg 记账正确，LuCI 可见）"
-            return 0
-        fi
-        log "[PKG] 本地 ipk 直装失败（依赖缺失？）：$_pci_pkg，改走本地源"
-    fi
-    # ② 走本地源，依赖由 opkg 自己解
-    _pkgcache_feed_ensure || return 1
-    _pkgcache_lists_ensure || log "[PKG] 本地索引铺设失败，改用 opkg update 拉取"
-    if [ -z "$_PKG_SIGOPT" ]; then
-        if opkg --help 2>&1 | grep -q 'no-check-signature'; then
-            _PKG_SIGOPT="--no-check-signature"
-        else
-            _PKG_SIGOPT="unsupported"
-        fi
-    fi
-    _pci_rc=0
-    if [ "$_PKG_SIGOPT" = "unsupported" ]; then
-        opkg install --force-reinstall "$_pci_pkg" >/dev/null 2>&1 || _pci_rc=1
-    else
-        opkg "$_PKG_SIGOPT" install --force-reinstall "$_pci_pkg" >/dev/null 2>&1 || _pci_rc=1
-    fi
-    if [ "$_pci_rc" = "0" ]; then
-        log "[PKG] 本地包源装回成功：$_pci_pkg（记账正确，LuCI 可见）"
-        return 0
-    fi
-    log "[PKG] 本地包源装不回 $_pci_pkg（缺签名或依赖），放弃 —— v.180.149 起不再拷文件兜底"
-    return 1
-}
-
-# 恢复单个包：只走本地包安装，不拷文件（v.180.149）
-_rom_restore_pkg() {
-    # 【v.180.149】改成只走包级。理由：
-    #   ① 拷文件修不了 opkg/apk 记账 —— 装回来的包 LuCI 看不见、依赖解不开、
-    #      下次升级会乱，属于「能跑但半残」；
-    #   ② 文件清单随包版本漂，判据越写越复杂，迟早出错。
-    # 老固件没有本地包库时也无法恢复 —— 装不上就报错，不再补一个半残状态。
-    #
-    # 【v.180.161】第二个参数为 1 = 强制重装（跳过「已装就跳过」判定）。
-    # 只有「文件确已不在」的调用方才许传 1：opkg 记账清不掉手删的文件，
-    # 而 pkg-cache-restore.sh 和下面的内置回退都以记账为准 —— 不强制的话，
-    # 恢复链会在这里返回 0 却不做任何事，日志上看是「装好了」，实际二进制还缺。
-    # PCR_FORCE 是 pkg-cache-lib.sh 的既定接口（那边 _pcr_install 已支持），
-    # 这里只是把它透传下去；前缀赋值由子进程按环境变量继承。
-    if [ "${2:-0}" = "1" ]; then
-        PCR_FORCE=1 _pkgcache_install "$1"
-    else
-        _pkgcache_install "$1"
-    fi
-}
+# 【2026-11-11】包恢复块（_pkgcache_resolve/_pkgcache_ready/
+# _pkgcache_install_apk/_pkgcache_install/_rom_restore_pkg）已整体挪到 _lib.sh：
+# bouncer/step.sh 也调用 _rom_restore_pkg，而它不 source main.sh，
+# 原位置跨文件 not found（真机 2026-11-11 审计发现）。
 
 # 【v.180.150】bouncer 不再单独拷文件 —— 和 lxc 一样走本地包安装。
 # /rom 是只读、不可修改的可信层，包库里的 ipk/apk 就是固件原样内容，
