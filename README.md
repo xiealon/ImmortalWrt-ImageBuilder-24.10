@@ -1,5 +1,20 @@
 # ImmortalWrt-ImageBuilder-24.10
 
+# 特殊提示:
+若未在action的enroll处填入key
+
+后续想用脚本机制完成enroll步骤
+
+① crowdsec_enroll_key.txt注册需在文件写入注册码
+
+② 进容器后执行（STATE_DIR 默认是 <ct>/.bootstrap）
+   rm -f /<ct_root>/.bootstrap/installed
+   
+③ 重启容器/设备，或手动跑完整引导：
+   /usr/sbin/bootstrap/bootstrap.sh --full
+
+# 说明
+
 ImmortalWrt **24.10.x** x86-64 固件构建线：官方 ImageBuilder 直接出固件，带 CrowdSec LXC。
 
 eBPF 代理用 **新版 daed 三件套**（`daed` / `luci-app-daede` / `vmlinux-btf`），来自 kenzok8/openwrt-daede 的 Release，由 `build24.sh` 下进 `packages/` 当本地包安装；本线**不装 honk**。
