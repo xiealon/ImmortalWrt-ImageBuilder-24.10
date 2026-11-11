@@ -419,10 +419,10 @@ PKGROOT="${PKGROOT:-}"
 # 24.10 那套 opkg（.ipk / Packages.gz / customfeeds.conf）完整地活在自己的仓库里，
 # 两个仓库各管各的（用户 2026-10-31 定）。原来的 _PKG_MGR + case 分流在 25.12 上
 # 恒走 apk，opkg 那一路永远不可达 —— 留着只让人多读一层，判断等于没判断。
-_PKG_DEF_OV=/root/apk-cache
-_PKG_DEF_RO=/rom/root/apk-cache
+_PKG_DEF_OV=/root/pkg-cache
+_PKG_DEF_RO=/rom/root/pkg-cache
 _PKG_IDX=Packages.gz
-_PKG_EXT=apk
+_PKG_EXT=ipk
 
 PKG_CACHE="${PKG_CACHE:-$_PKG_DEF_OV}"
 # 【v.180.128】只读基座副本，解析时优先于 overlay。

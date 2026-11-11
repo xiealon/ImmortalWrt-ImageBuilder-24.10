@@ -1199,10 +1199,10 @@ build_overlay_root() {
 # 但 bouncer/step.sh 不 source main.sh，调 _rom_restore_pkg 就 not found。
 # 现在统一放 _lib.sh，所有组都能解析到。用 :- 写法，net/step.sh 里同名赋值不冲突。
 if [ -z "${_PKG_IDX:-}" ]; then
-    _PKG_DEF_OV=/root/apk-cache
-    _PKG_DEF_RO=/rom/root/apk-cache
-    _PKG_IDX=packages.adb
-    _PKG_EXT=apk
+    _PKG_DEF_OV=/root/pkg-cache
+    _PKG_DEF_RO=/rom/root/pkg-cache
+    _PKG_IDX=Packages.gz
+    _PKG_EXT=ipk
     PKG_CACHE="${PKG_CACHE:-$_PKG_DEF_OV}"
     PKG_CACHE_RO="${PKG_CACHE_RO:-$_PKG_DEF_RO}"
     _PKG_CACHE_ACT=""
