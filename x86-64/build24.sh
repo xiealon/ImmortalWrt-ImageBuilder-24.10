@@ -123,7 +123,15 @@ if echo "$PACKAGES" | grep -q "daed"; then
     _dd_api="https://api.github.com/repos/kenzok8/openwrt-daede/releases/latest"
     echo "==> daed: 读取 Release 资产清单"
     echo "    $_dd_api"
-    _dd_json=$(wget -qO- --timeout=30 --tries=3 "$_dd_api" 2>/dev/null) || _dd_json=""
+    # 【2026-11-18】匿名 GitHub API 只有 60 次/小时/IP，多线并行会拿不到资产清单。
+    _dd_json=""
+    if [ -n "${GITHUB_TOKEN:-}" ]; then
+        _dd_json=$(curl -fsSL --retry 3 --connect-timeout 20 --max-time 60 \
+            -H "Authorization: Bearer $GITHUB_TOKEN" "$_dd_api" 2>/dev/null) || _dd_json=""
+    fi
+    if [ -z "$_dd_json" ]; then
+        _dd_json=$(wget -qO- --timeout=30 --tries=3 "$_dd_api" 2>/dev/null) || _dd_json=""
+    fi
     if [ -z "$_dd_json" ]; then
         echo "::error::daed: 取不到 openwrt-daede Release 资产清单（网络不通或 Release 不存在）"
         exit 1
