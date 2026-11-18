@@ -94,18 +94,29 @@ fi
 # 换成一个现场断言：store 的 run 包必须真的解出了 clashoo 的 ipk。
 # 不这么做的话，失败会以 `make image` 的 Unknown package 'clashoo' 收场，
 # 看不出是「store 没给这个包」还是「包名写错了」。
-if echo "$PACKAGES" | grep -q "clashoo"; then
-    _cl_ipk=$(ls packages/clashoo_*.ipk 2>/dev/null | head -n1)
-    _cl_luci=$(ls packages/luci-app-clashoo_*.ipk 2>/dev/null | head -n1)
-    if [ -z "$_cl_ipk" ] || [ -z "$_cl_luci" ]; then
-        echo "::error::PACKAGES 里选了 clashoo，但 packages/ 下缺包（clashoo=$_cl_ipk luci=$_cl_luci）——store 的 run 没解出 ipk"
+# [2026-11-18] clashoo -> nikki; ssr-plus as fallback (opkg line).
+if echo "$PACKAGES" | grep -q "nikki"; then
+    _nk_ipk=$(ls packages/nikki_*.ipk 2>/dev/null | head -n1)
+    _nk_luci=$(ls packages/luci-app-nikki_*.ipk 2>/dev/null | head -n1)
+    if [ -z "$_nk_ipk" ] || [ -z "$_nk_luci" ]; then
+        echo "::error::PACKAGES 里选了 nikki，但 packages/ 缺 ipk（nikki=$_nk_ipk luci=$_nk_luci）—— store 的 run 没解出 ipk"
         ls -la packages/ 2>/dev/null || true
-        echo "::error::预期来自 xiealon/store 的 run/x86/clashoo_2026.05.15_x86_64.run"
         exit 1
     fi
-    echo "✅ clashoo 就位: $_cl_ipk + $_cl_luci（自带 mihomo 内核，不再单独下载）"
+    echo "OK nikki: $_nk_ipk + $_nk_luci"
 else
-    echo "⚪️ 未选择 clashoo"
+    echo "SKIP nikki: not selected"
+fi
+if echo "$PACKAGES" | grep -q "ssr-plus"; then
+    _sp_n=0
+    for _sp_p in luci-app-ssr-plus xray-core shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-redir; do
+        if ls "packages/$_sp_p"_*.ipk >/dev/null 2>&1; then
+            _sp_n=$((_sp_n + 1))
+        else
+            echo "::warning::ssr-plus fallback missing: $_sp_p"
+        fi
+    done
+    echo "OK ssr-plus fallback: $_sp_n/4 ipks ready"
 fi
 
 # daed：新版 daed 三件套，从 kenzok8/openwrt-daede 的 release 取 ipk。
@@ -592,7 +603,9 @@ dae dae-geoip dae-geosite luci-app-dae luci-i18n-dae-zh-cn
 crowdsec crowdsec-firewall-bouncer luci-app-crowdsec-firewall-bouncer
 luci-i18n-crowdsec-firewall-bouncer-zh-cn nftables-json
 sing-box microsocks dns2socks ipt2socks chinadns-ng tcping
-clashoo luci-app-clashoo luci-i18n-clashoo-zh-cn
+nikki luci-app-nikki luci-i18n-nikki-zh-cn
+luci-app-ssr-plus luci-i18n-ssr-plus-zh-cn xray-core
+shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-redir
 adblock luci-app-adblock luci-i18n-adblock-zh-cn
 coreutils-nohup coreutils-stat sqlite3-cli"
 
