@@ -13,7 +13,7 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES aria2 luci-app-aria2 luci-i18n-aria2-zh-cn"
 # 防爆破也走 crowdsec 的 ssh 场景。
 # 24 线这里是三包全列，删整行即整组不进固件。
 
-CUSTOM_PACKAGES="$CUSTOM_PACKAGES ca-certificates lucky luci-app-lucky luci-i18n-lucky-zh-cn"
+CUSTOM_PACKAGES="$CUSTOM_PACKAGES ca-certificates acme-acmesh acme-common luci-app-acme luci-i18n-acme-zh-cn ddns-go luci-app-ddns-go luci-i18n-ddns-go-zh-cn"
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-openclash geoview kmod-tun kmod-inet-diag kmod-nft-tproxy kmod-nft-socket luci-compat bash curl ip-full unzip"
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-ssr-plus luci-i18n-ssr-plus-zh-cn xray-core"
