@@ -647,7 +647,7 @@ liblucihttp libmnl libncurses libnetfilter-conntrack libnettle libnfnetlink libn
 libopenssl libreadline libubox libubus-lua libubus libuci libucode lua
 luci-lib-base luci-lib-ip luci-lib-jsonc luci-lib-nixio ruby-bigdecimal ruby-date ruby-digest ruby-enc
 ruby-pstore ruby-psych ruby-stringio terminfo ucode-mod-lua liblua5.1 libnghttp2 libruby
-luci-app-mosdns luci-i18n-mosdns-zh-cn luci-app-daede vmlinux-btf luci-app-ssr-plus luci-i18n-ssr-plus-zh-cn shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-redir acme-acmesh acme-common luci-app-acme luci-i18n-acme-zh-cn ddns-go luci-app-ddns-go luci-i18n-ddns-go-zh-cn openssl-util socat wget-ssl"
+luci-app-mosdns luci-i18n-mosdns-zh-cn luci-app-daede vmlinux-btf luci-app-ssr-plus luci-i18n-ssr-plus-zh-cn shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-redir acme-acmesh acme-common luci-app-acme luci-i18n-acme-zh-cn ddns-go luci-app-ddns-go luci-i18n-ddns-go-zh-cn openssl-util socat wget-ssl aria2 aria2-openssl ariang cloudflared ksmbd-server libblkid libjson-script liblzo libmount libnl-cli libnl-core libnl-genl libnl-nf libnl-route libnl libopenssl-conf libopenssl-legacy libpcre2 libstdcpp libtirpc libuuid libuv libwrap libxtables lsqlite3 luci-app-aria2 luci-app-cloudflared luci-app-filemanager luci-app-nps luci-app-tailscale-community nfs-kernel-server nfs-utils nginx-full nginx-mod-stream nginx-ssl-util npc rpcbind tailscale uhttpd"
 
 # --- 来源 A：容器里已经存在的 ipk ---
 # 构建本来就要把用到的包取到本地，能捞到就别再下载一遍（省流量也省时间）。
