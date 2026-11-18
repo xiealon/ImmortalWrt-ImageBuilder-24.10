@@ -614,7 +614,8 @@ libblobmsg-json libbpf libcurl libelf libgcc libgmp libjson-c liblucihttp-lua
 liblucihttp libmnl libncurses libnetfilter-conntrack libnettle libnfnetlink libnftnl libnl-tiny
 libopenssl libreadline libubox libubus-lua libubus libuci libucode lua
 luci-lib-base luci-lib-ip luci-lib-jsonc luci-lib-nixio ruby-bigdecimal ruby-date ruby-digest ruby-enc
-ruby-pstore ruby-psych ruby-stringio terminfo ucode-mod-lua liblua5.1 libnghttp2 libruby"
+ruby-pstore ruby-psych ruby-stringio terminfo ucode-mod-lua liblua5.1 libnghttp2 libruby
+luci-app-mosdns luci-i18n-mosdns-zh-cn luci-app-daede vmlinux-btf luci-app-ssr-plus luci-i18n-ssr-plus-zh-cn shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-redir"
 
 # --- 来源 A：容器里已经存在的 ipk ---
 # 构建本来就要把用到的包取到本地，能捞到就别再下载一遍（省流量也省时间）。
