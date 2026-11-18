@@ -37,7 +37,9 @@
 _here=$(cd "$(dirname "$0")" && pwd)
 . "$_here/_lib.sh"
 
-STEPS="01-pkg 02-conf 03-localrule 04-config 05-upstream 06-apply"
+STEPS="01-pkg 02-conf 03-localrule 04-config 05-upstream 06-apply 95-luci"
+# 【2026-11-18】95-luci 一直存在但没进 STEPS，等于永远不跑：
+# 删掉 luci-app-smartdns 后只装回 smartdns 本体，LuCI 页面永久缺。
 
 case "${1:-}" in
 --list)
