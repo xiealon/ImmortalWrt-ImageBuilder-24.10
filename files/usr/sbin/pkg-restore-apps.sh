@@ -151,7 +151,10 @@ _RESTORE="${RESTORE_BIN:-$SROOT/usr/sbin/pkg-restore.sh}"
 #                      固件库无、包库有 → _pa_should 判「固件未带」，永远跳过
 #   libopenssl3        固件库有、包库无 → 装不回；且它是全系统的 TLS 底座，
 #                      不属于某一个应用的依赖
-_PA_NIKKI="nikki luci-app-nikki luci-i18n-nikki-zh-cn"
+_PA_OC="luci-app-openclash"
+# 【2026-11-18】OpenClash 内核与 geo 数据不属任何包：build24.sh 把 clash_meta /
+# GeoIP.dat / GeoSite.dat 写进 files/etc/openclash/ 带进固件，包在册不等于内核在。
+_PA_OC_FILES="/etc/openclash/core/clash_meta /etc/openclash/GeoIP.dat /etc/openclash/GeoSite.dat"
 # [2026-11-18] clashoo -> nikki; ssr-plus is the fallback (both provide mihomo)
 _PA_SSRP="luci-app-ssr-plus luci-i18n-ssr-plus-zh-cn xray-core shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-redir"
 # 【2026-11-10】官方线改用 daed（用户定），保护组整体换过来，三件：
@@ -191,7 +194,7 @@ _PA_COMMON="sing-box"
 # 结论：这三个组只走 _pa_installed（opkg list-installed），文件级一律放行。
 # 二进制真被删了，重装包自然连文件一起回来；配置文件不被任何自动动作碰。
 _PA_HONK="honk luci-app-honk luci-i18n-honk-zh-cn"
-_PA_PKGONLY="$_PA_NIKKI $_PA_SSRP $_PA_DAED $_PA_HONK"
+_PA_PKGONLY="$_PA_OC $_PA_SSRP $_PA_DAED $_PA_HONK"
 
 # 【2026-11-02】daed 在 25.12 线已被 honk 取代（用户定），原来的 geo 软链接判据一并删除：
 #   honk 的规则集不走 /usr/share/daed/*.dat 软链接，而是按 native_api.geosite_download_url /
@@ -202,7 +205,7 @@ _PA_PKGONLY="$_PA_NIKKI $_PA_SSRP $_PA_DAED $_PA_HONK"
 # 【2026-11-10】_PA_HONK 并入清单：_PA_PKGONLY 原本写了 honk 三包却不进 _PA_LIST，
 # 等于「判据写了、范围没进去」。这些包只有对应变体才有，靠 _pa_should 按
 # /rom/usr/lib/opkg/info/<包>.list 过滤 —— 没有该包的线上自动跳过，不误报。
-_PA_LIST="${CS_PROBE_APPS:-$_PA_NIKKI $_PA_SSRP $_PA_GEO $_PA_DAED $_PA_COMMON $_PA_HONK}"
+_PA_LIST="${CS_PROBE_APPS:-$_PA_OC $_PA_SSRP $_PA_GEO $_PA_DAED $_PA_COMMON $_PA_HONK}"
 
 log() { printf '[APP] %s\n' "$*"; }
 
@@ -292,6 +295,33 @@ _pa_files_ok() {
 # 输出「该有却没有」的包名（一行，空格分隔）。没有则输出空行。
 # 「没有」含三种形态：包不在册；包在册但运行数据断了（见 _pa_data_ok）；
 # 包在册但关键文件被删（见 _pa_files_ok，v.180.192）。
+# OpenClash 内核/geo 数据：只判「在不在、非空」。
+_pa_oc_files_ok() {
+    for _pof_f in $_PA_OC_FILES; do
+        [ -s "$_pof_f" ] || return 1
+    done
+    return 0
+}
+
+# 从 /rom 出厂副本拷回（chmod +x 只对 clash_meta）。
+_pa_oc_files_repair() {
+    for _pof_f in $_PA_OC_FILES; do
+        [ -s "$_pof_f" ] && continue
+        if [ ! -e "/rom$_pof_f" ]; then
+            log "OpenClash 文件缺失，且 /rom 里也没有：$_pof_f"
+            continue
+        fi
+        mkdir -p "$(dirname "$_pof_f")"
+        if cp -f "/rom$_pof_f" "$_pof_f"; then
+            [ "$(basename "$_pof_f")" = "clash_meta" ] && chmod +x "$_pof_f"
+            log "OpenClash 文件已从 /rom 恢复：$_pof_f"
+        else
+            log "OpenClash 文件恢复失败：$_pof_f"
+        fi
+    done
+    return 0
+}
+
 _pa_missing() {
     _pa_m=""
     for _pa_p in $_PA_LIST; do
@@ -305,7 +335,12 @@ _pa_missing() {
 _pa_check() {
     _pa_cm=$(_pa_missing)
     [ -n "$_pa_cm" ] && printf '%s\n' "$_pa_cm"
-    [ -z "$_pa_cm" ]
+    _pa_oc_bad=0
+    if _pa_should luci-app-openclash && ! _pa_oc_files_ok; then
+        printf 'openclash-core(文件缺失)\n'
+        _pa_oc_bad=1
+    fi
+    [ -z "$_pa_cm" ] && [ "$_pa_oc_bad" = 0 ]
 }
 
 _pa_list() {
@@ -328,6 +363,10 @@ _pa_list() {
 }
 
 _pa_repair() {
+    # OpenClash 内核/geo 数据不属任何包，先按 /rom 出厂副本补一次
+    if _pa_should luci-app-openclash && ! _pa_oc_files_ok; then
+        _pa_oc_files_repair
+    fi
     _pa_n=0
     for _pa_p in $(_pa_missing); do
         _pa_n=$((_pa_n + 1))
@@ -365,7 +404,11 @@ _pa_repair() {
     fi
     # 装完必须重判。opkg 侧 _pa_installed 有缓存，先清掉再算。
     _PA_CACHE=""
-    [ -z "$(_pa_missing)" ]
+    [ -z "$(_pa_missing)" ] || return 1
+    if _pa_should luci-app-openclash && ! _pa_oc_files_ok; then
+        return 1
+    fi
+    return 0
 }
 
 case "${1:---repair}" in
