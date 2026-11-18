@@ -594,25 +594,27 @@ mkdir -p "$_PC_DIR"
 #
 # 注意：下面是**双引号字符串**，注释只能写在起始引号之前。写在里面的 `#`
 # 不是注释，会被当成包名的一部分（v.180.167 踩过这个坑）。
-_PC_WANT="lxc lxc-attach lxc-auto lxc-autostart lxc-cgroup lxc-checkconfig lxc-common
-lxc-config lxc-configs lxc-console lxc-copy lxc-create lxc-destroy lxc-device
-lxc-execute lxc-freeze lxc-hooks lxc-info lxc-init lxc-ls lxc-monitor lxc-monitord
-lxc-snapshot lxc-start lxc-stop lxc-templates lxc-top lxc-unfreeze lxc-unprivileged
-lxc-unshare lxc-user-nic lxc-usernsexec lxc-wait liblxc rpcd-mod-lxc
-luci-app-lxc luci-i18n-lxc-zh-cn
-smartdns smartdns-ui luci-app-smartdns luci-i18n-smartdns-zh-cn
-mosdns luci-app-mosdns luci-i18n-mosdns-zh-cn v2ray-geoip v2ray-geosite
-daed luci-app-daede vmlinux-btf
-dae dae-geoip dae-geosite luci-app-dae luci-i18n-dae-zh-cn
-crowdsec crowdsec-firewall-bouncer luci-app-crowdsec-firewall-bouncer
-luci-i18n-crowdsec-firewall-bouncer-zh-cn nftables-json
-sing-box microsocks dns2socks ipt2socks chinadns-ng tcping
-luci-app-openclash ruby ruby-yaml
-luci-app-ssr-plus luci-i18n-ssr-plus-zh-cn xray-core
-shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-redir
-adblock luci-app-adblock luci-i18n-adblock-zh-cn
-coreutils-nohup coreutils-stat sqlite3-cli
-coreutils-base64 curl dnsmasq-full ip-full jq libuci-lua luci-compat luci-lua-runtime lyaml microsocks nping resolveip unzip xz-utils libc libev libsodium libudns libpcap libpcap1 libyaml btrfs-progs ca-certificates cgi-io containerd docker docker-compose dockerd iptables-mod-extra libattr libblkid1 libblobmsg-json20260213 libcap libgcc1 libjson-c5 liblucihttp-ucode liblucihttp0 liblzo2 libmount1 libnl-tiny1 libopenssl3 libpthread librt libseccomp libubox20260213 libubus20251202 libuci20250120 libucode20230711 libuuid1 libuv1 libwebsockets-full libxtables12 luci-app-dockerman luci-base luci-i18n-dockerman-zh-cn rpcd rpcd-mod-file rpcd-mod-luci rpcd-mod-ucode runc tini ttyd ucode ucode-mod-fs ucode-mod-html ucode-mod-log ucode-mod-math ucode-mod-socket ucode-mod-ubus ucode-mod-uci zlib"
+_PC_WANT="lxc lxc-attach lxc-auto lxc-autostart lxc-cgroup lxc-checkconfig lxc-common lxc-config
+lxc-configs lxc-console lxc-copy lxc-create lxc-destroy lxc-device lxc-execute lxc-freeze
+lxc-hooks lxc-info lxc-init lxc-ls lxc-monitor lxc-monitord lxc-snapshot lxc-start
+lxc-stop lxc-templates lxc-top lxc-unfreeze lxc-unprivileged lxc-unshare lxc-user-nic lxc-usernsexec
+lxc-wait liblxc rpcd-mod-lxc luci-app-lxc luci-i18n-lxc-zh-cn smartdns smartdns-ui luci-app-smartdns
+luci-i18n-smartdns-zh-cn mosdns v2ray-geoip v2ray-geosite daed dae dae-geoip dae-geosite
+luci-app-dae luci-i18n-dae-zh-cn crowdsec crowdsec-firewall-bouncer luci-app-crowdsec-firewall-bouncer luci-i18n-crowdsec-firewall-bouncer-zh-cn nftables-json sing-box
+microsocks dns2socks ipt2socks chinadns-ng tcping luci-app-openclash ruby ruby-yaml
+xray-core adblock luci-app-adblock luci-i18n-adblock-zh-cn coreutils-nohup coreutils-stat sqlite3-cli coreutils-base64
+curl dnsmasq-full ip-full jq libuci-lua luci-compat luci-lua-runtime lyaml
+microsocks nping resolveip unzip xz-utils libc libev libsodium
+libudns libpcap libyaml btrfs-progs ca-certificates cgi-io containerd docker
+docker-compose dockerd iptables-mod-extra libattr libcap liblucihttp-ucode libpthread librt
+libseccomp libwebsockets-full luci-app-dockerman luci-base luci-i18n-dockerman-zh-cn rpcd rpcd-mod-file rpcd-mod-luci
+rpcd-mod-ucode runc tini ttyd ucode ucode-mod-fs ucode-mod-html ucode-mod-log
+ucode-mod-math ucode-mod-socket ucode-mod-ubus ucode-mod-uci zlib bash ca-bundle jansson
+libblobmsg-json libbpf libcurl libelf libgcc libgmp libjson-c liblucihttp-lua
+liblucihttp libmnl libncurses libnetfilter-conntrack libnettle libnfnetlink libnftnl libnl-tiny
+libopenssl libreadline libubox libubus-lua libubus libuci libucode lua
+luci-lib-base luci-lib-ip luci-lib-jsonc luci-lib-nixio ruby-bigdecimal ruby-date ruby-digest ruby-enc
+ruby-pstore ruby-psych ruby-stringio terminfo ucode-mod-lua liblua5.1 libnghttp2 libruby"
 
 # --- 来源 A：容器里已经存在的 ipk ---
 # 构建本来就要把用到的包取到本地，能捞到就别再下载一遍（省流量也省时间）。
