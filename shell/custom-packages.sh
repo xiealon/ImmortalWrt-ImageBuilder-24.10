@@ -29,7 +29,6 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES crowdsec-firewall-bouncer luci-app-crowdsec-fi
 # 也认 nftables-json，所以构建期必须随固件进 /rom，否则那条恢复路径两边都空。
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES nftables-json"
 
-CUSTOM_PACKAGES="$CUSTOM_PACKAGES ddns-go luci-app-ddns-go luci-i18n-ddns-go-zh-cn"
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES dockerd luci-app-dockerman luci-i18n-dockerman-zh-cn cgroup-tools kmod-veth"
 
