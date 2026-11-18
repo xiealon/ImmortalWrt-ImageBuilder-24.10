@@ -157,6 +157,10 @@ _PA_LUCKY="lucky luci-app-lucky luci-i18n-lucky-zh-cn"
 # 【2026-11-18】OpenClash 内核与 geo 数据不属任何包：build24.sh 把 clash_meta /
 # GeoIP.dat / GeoSite.dat 写进 files/etc/openclash/ 带进固件，包在册不等于内核在。
 _PA_OC_FILES="/etc/openclash/core/clash_meta /etc/openclash/GeoIP.dat /etc/openclash/GeoSite.dat"
+# 【2026-11-18】同一套保护也覆盖 honk/dae 的 geo 数据。
+# 语义与上面一致：只判「存在且非空」，不比内容、不比大小 —— honk 或 OpenClash
+# 自己更新后文件非空，保护就放过（更新能保留）；被删/被清空才从 /rom 拷回。
+_PA_ASSET_FILES="$_PA_OC_FILES /usr/share/v2ray/geoip.dat /usr/share/v2ray/geosite.dat"
 # [2026-11-18] clashoo -> nikki; ssr-plus is the fallback (both provide mihomo)
 _PA_SSRP="luci-app-ssr-plus luci-i18n-ssr-plus-zh-cn xray-core shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-redir"
 # 【2026-11-10】官方线改用 daed（用户定），保护组整体换过来，三件：
@@ -299,7 +303,7 @@ _pa_files_ok() {
 # 包在册但关键文件被删（见 _pa_files_ok，v.180.192）。
 # OpenClash 内核/geo 数据：只判「在不在、非空」。
 _pa_oc_files_ok() {
-    for _pof_f in $_PA_OC_FILES; do
+    for _pof_f in $_PA_ASSET_FILES; do
         [ -s "$_pof_f" ] || return 1
     done
     return 0
@@ -307,7 +311,7 @@ _pa_oc_files_ok() {
 
 # 从 /rom 出厂副本拷回（chmod +x 只对 clash_meta）。
 _pa_oc_files_repair() {
-    for _pof_f in $_PA_OC_FILES; do
+    for _pof_f in $_PA_ASSET_FILES; do
         [ -s "$_pof_f" ] && continue
         if [ ! -e "/rom$_pof_f" ]; then
             log "OpenClash 文件缺失，且 /rom 里也没有：$_pof_f"
@@ -338,7 +342,7 @@ _pa_check() {
     _pa_cm=$(_pa_missing)
     [ -n "$_pa_cm" ] && printf '%s\n' "$_pa_cm"
     _pa_oc_bad=0
-    if _pa_should luci-app-openclash && ! _pa_oc_files_ok; then
+    if ! _pa_oc_files_ok; then
         printf 'openclash-core(文件缺失)\n'
         _pa_oc_bad=1
     fi
@@ -366,7 +370,7 @@ _pa_list() {
 
 _pa_repair() {
     # OpenClash 内核/geo 数据不属任何包，先按 /rom 出厂副本补一次
-    if _pa_should luci-app-openclash && ! _pa_oc_files_ok; then
+    if ! _pa_oc_files_ok; then
         _pa_oc_files_repair
     fi
     _pa_n=0
@@ -407,7 +411,7 @@ _pa_repair() {
     # 装完必须重判。opkg 侧 _pa_installed 有缓存，先清掉再算。
     _PA_CACHE=""
     [ -z "$(_pa_missing)" ] || return 1
-    if _pa_should luci-app-openclash && ! _pa_oc_files_ok; then
+    if ! _pa_oc_files_ok; then
         return 1
     fi
     return 0
