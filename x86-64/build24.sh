@@ -608,7 +608,7 @@ luci-app-ssr-plus luci-i18n-ssr-plus-zh-cn xray-core
 shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-redir
 adblock luci-app-adblock luci-i18n-adblock-zh-cn
 coreutils-nohup coreutils-stat sqlite3-cli
-coreutils-base64 curl dnsmasq-full ip-full jq libuci-lua luci-compat luci-lua-runtime lyaml microsocks nping resolveip unzip xz-utils libc libev libsodium libudns libpcap1 libyaml"
+coreutils-base64 curl dnsmasq-full ip-full jq libuci-lua luci-compat luci-lua-runtime lyaml microsocks nping resolveip unzip xz-utils libc libev libsodium libudns libpcap libpcap1 libyaml"
 
 # --- 来源 A：容器里已经存在的 ipk ---
 # 构建本来就要把用到的包取到本地，能捞到就别再下载一遍（省流量也省时间）。
