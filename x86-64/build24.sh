@@ -95,17 +95,21 @@ fi
 # 不这么做的话，失败会以 `make image` 的 Unknown package 'clashoo' 收场，
 # 看不出是「store 没给这个包」还是「包名写错了」。
 # [2026-11-18] clashoo -> nikki; ssr-plus as fallback (opkg line).
-if echo "$PACKAGES" | grep -q "nikki"; then
-    _nk_ipk=$(ls packages/nikki_*.ipk 2>/dev/null | head -n1)
-    _nk_luci=$(ls packages/luci-app-nikki_*.ipk 2>/dev/null | head -n1)
-    if [ -z "$_nk_ipk" ] || [ -z "$_nk_luci" ]; then
-        echo "::error::PACKAGES 里选了 nikki，但 packages/ 缺 ipk（nikki=$_nk_ipk luci=$_nk_luci）—— store 的 run 没解出 ipk"
+if echo "$PACKAGES" | grep -q "luci-app-openclash"; then
+    _oc_ipk=$(ls packages/luci-app-openclash_*.ipk 2>/dev/null | head -n1)
+    _oc_core=files/etc/openclash/core/clash_meta
+    if [ -z "$_oc_ipk" ]; then
+        echo "::error::PACKAGES 里选了 luci-app-openclash，但 packages/ 里没有它的 ipk（上游 release 抓取失败？）"
         ls -la packages/ 2>/dev/null || true
         exit 1
     fi
-    echo "OK nikki: $_nk_ipk + $_nk_luci"
+    if [ ! -s "$_oc_core" ]; then
+        echo "::error::OpenClash 缺内核：$_oc_core 不存在（上面那段 core 下载失败）"
+        exit 1
+    fi
+    echo "OK openclash: $_oc_ipk + core $(du -h "$_oc_core" | cut -f1)"
 else
-    echo "SKIP nikki: not selected"
+    echo "SKIP openclash: not selected"
 fi
 if echo "$PACKAGES" | grep -q "ssr-plus"; then
     _sp_n=0
@@ -603,7 +607,7 @@ dae dae-geoip dae-geosite luci-app-dae luci-i18n-dae-zh-cn
 crowdsec crowdsec-firewall-bouncer luci-app-crowdsec-firewall-bouncer
 luci-i18n-crowdsec-firewall-bouncer-zh-cn nftables-json
 sing-box microsocks dns2socks ipt2socks chinadns-ng tcping
-nikki luci-app-nikki luci-i18n-nikki-zh-cn
+luci-app-openclash ruby ruby-yaml
 luci-app-ssr-plus luci-i18n-ssr-plus-zh-cn xray-core
 shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-redir
 adblock luci-app-adblock luci-i18n-adblock-zh-cn
