@@ -159,13 +159,15 @@ _PA_DDNS="ddns-go luci-app-ddns-go luci-i18n-ddns-go-zh-cn"
 # 穿透/隧道工具：主包 + 直接依赖都列进来（实测 apk info -a），
 # 这样 --check 能同时发现「主包没了」与「依赖缺了」，--repair 一次装齐。
 _PA_TOOLS="npc luci-app-nps luci-i18n-nps-zh-cn cloudflared luci-app-cloudflared luci-i18n-cloudflared-zh-cn tailscale luci-app-tailscale-community luci-i18n-tailscale-community-zh-cn ca-bundle wget-ssl luci-compat luci-lua-runtime luci-base ip kmod-tun"
+# Web 服务器与自建中转（nginx 无界面，frp 有界面）
+_PA_WEB="nginx-full nginx-mod-stream nginx-ssl-util frpc frps luci-app-frpc luci-app-frps luci-i18n-frpc-zh-cn luci-i18n-frps-zh-cn"
 # 【2026-11-18】OpenClash 内核与 geo 数据不属任何包：build24.sh 把 clash_meta /
 # GeoIP.dat / GeoSite.dat 写进 files/etc/openclash/ 带进固件，包在册不等于内核在。
 _PA_OC_FILES="/etc/openclash/core/clash_meta /etc/openclash/GeoIP.dat /etc/openclash/GeoSite.dat"
 # 【2026-11-18】同一套保护也覆盖 honk/dae 的 geo 数据。
 # 语义与上面一致：只判「存在且非空」，不比内容、不比大小 —— honk 或 OpenClash
 # 自己更新后文件非空，保护就放过（更新能保留）；被删/被清空才从 /rom 拷回。
-_PA_ASSET_FILES="$_PA_OC_FILES /usr/share/v2ray/geoip.dat /usr/share/v2ray/geosite.dat /etc/adblock/adblock.blocklist"
+_PA_ASSET_FILES="$_PA_OC_FILES /usr/share/v2ray/geoip.dat /usr/share/v2ray/geosite.dat /etc/adblock/adblock.blocklist /etc/nginx/nginx.conf"
 # [2026-11-18] clashoo -> nikki; ssr-plus is the fallback (both provide mihomo)
 _PA_SSRP="luci-app-ssr-plus luci-i18n-ssr-plus-zh-cn xray-core shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-redir"
 # 【2026-11-10】官方线改用 daed（用户定），保护组整体换过来，三件：
@@ -205,7 +207,7 @@ _PA_COMMON="sing-box"
 # 结论：这三个组只走 _pa_installed（opkg list-installed），文件级一律放行。
 # 二进制真被删了，重装包自然连文件一起回来；配置文件不被任何自动动作碰。
 _PA_HONK="honk luci-app-honk luci-i18n-honk-zh-cn"
-_PA_PKGONLY="$_PA_OC $_PA_CERT $_PA_DDNS $_PA_TOOLS $_PA_SSRP $_PA_DAED $_PA_HONK"
+_PA_PKGONLY="$_PA_OC $_PA_CERT $_PA_DDNS $_PA_TOOLS $_PA_SSRP $_PA_DAED $_PA_HONK $_PA_WEB"
 
 # 【2026-11-02】daed 在 25.12 线已被 honk 取代（用户定），原来的 geo 软链接判据一并删除：
 #   honk 的规则集不走 /usr/share/daed/*.dat 软链接，而是按 native_api.geosite_download_url /
@@ -216,7 +218,7 @@ _PA_PKGONLY="$_PA_OC $_PA_CERT $_PA_DDNS $_PA_TOOLS $_PA_SSRP $_PA_DAED $_PA_HON
 # 【2026-11-10】_PA_HONK 并入清单：_PA_PKGONLY 原本写了 honk 三包却不进 _PA_LIST，
 # 等于「判据写了、范围没进去」。这些包只有对应变体才有，靠 _pa_should 按
 # /rom/usr/lib/opkg/info/<包>.list 过滤 —— 没有该包的线上自动跳过，不误报。
-_PA_LIST="${CS_PROBE_APPS:-$_PA_OC $_PA_CERT $_PA_DDNS $_PA_TOOLS $_PA_SSRP $_PA_GEO $_PA_DAED $_PA_COMMON $_PA_HONK}"
+_PA_LIST="${CS_PROBE_APPS:-$_PA_OC $_PA_CERT $_PA_DDNS $_PA_TOOLS $_PA_SSRP $_PA_GEO $_PA_DAED $_PA_COMMON $_PA_HONK} $_PA_WEB"
 
 log() { printf '[APP] %s\n' "$*"; }
 
