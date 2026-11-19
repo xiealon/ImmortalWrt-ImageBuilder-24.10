@@ -37,6 +37,11 @@ case "${1:-}" in
     _sd_serve || exit 1
     _sd_conf_ok || exit 3
     _sd_localrule_ok || exit 4
+    # 【2026-11-19 同步 25.12】补第 5 态：服务与规则都对，但界面（luci-app-smartdns）被删。
+    # 不判界面时 restore.sh --check 会返 0 → 编排器认为无需修复 → 界面永远补不回。
+    if [ -x "$_here/95-luci.sh" ]; then
+        sh "$_here/95-luci.sh" --check || exit 5
+    fi
     exit 0
     ;;
 *)
