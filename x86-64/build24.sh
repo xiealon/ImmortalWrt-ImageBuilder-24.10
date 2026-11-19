@@ -659,7 +659,8 @@ libmbedtls frpc frps luci-app-frpc luci-app-frps luci-i18n-frpc-zh-cn luci-i18n-
 nginx-mod-stream nginx-ssl-util coreutils-stty script-utils
 luci-app-3ginfo-lite luci-app-aria2 luci-app-cifs-mount luci-app-diskman luci-app-email luci-app-filemanager luci-app-firewall luci-app-hd-idle luci-app-ksmbd luci-app-nfs luci-app-openvpn luci-app-p910nd luci-app-package-manager luci-app-partexp luci-app-rtp2httpd luci-app-sqm luci-app-taskplan luci-app-timewol luci-app-ttyd luci-app-uhttpd luci-app-upnp luci-app-wechatpush
 bc f2fs-tools f2fsck losetup resize2fs e2fsprogs tune2fs blkid
-p910nd"
+p910nd
+luci-i18n-3ginfo-lite-zh-cn luci-i18n-cifs-mount-zh-cn luci-i18n-diskman-zh-cn luci-i18n-email-zh-cn luci-i18n-firewall-zh-cn luci-i18n-hd-idle-zh-cn luci-i18n-ksmbd-zh-cn luci-i18n-nfs-zh-cn luci-i18n-openvpn-zh-cn luci-i18n-p910nd-zh-cn luci-i18n-package-manager-zh-cn luci-i18n-rtp2httpd-zh-cn luci-i18n-sqm-zh-cn luci-i18n-timewol-zh-cn luci-i18n-ttyd-zh-cn luci-i18n-uhttpd-zh-cn luci-i18n-upnp-zh-cn luci-i18n-wechatpush-zh-cn"
 
 # --- 来源 A：容器里已经存在的 ipk ---
 # 构建本来就要把用到的包取到本地，能捞到就别再下载一遍（省流量也省时间）。
