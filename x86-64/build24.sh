@@ -654,9 +654,9 @@ libjson-script liblzo libmount libnl-cli libnl-core libnl-genl libnl-nf libnl-ro
 libnl libopenssl-conf libopenssl-legacy libpcre2 libstdcpp libtirpc libuuid libuv
 libwrap libxtables lsqlite3 luci-app-aria2 luci-app-cloudflared luci-app-filemanager luci-app-nps luci-app-tailscale-community
 nfs-kernel-server nfs-utils npc rpcbind tailscale uhttpd libsqlite3 libxml2
-luci-i18n-nps-zh-cn luci-i18n-cloudflared-zh-cn luci-i18n-tailscale-community-zh-cn luci-i18n-aria2-zh-cn luci-i18n-filemanager-zh-cn gost libatomic libltdl
-liblua5.4 libmbedtls luci-app-gost luci-i18n-gost-zh-cn frpc frps luci-app-frpc luci-app-frps
-luci-i18n-frpc-zh-cn luci-i18n-frps-zh-cn nginx-full nginx-mod-stream nginx-ssl-util"
+luci-i18n-nps-zh-cn luci-i18n-cloudflared-zh-cn luci-i18n-tailscale-community-zh-cn luci-i18n-aria2-zh-cn luci-i18n-filemanager-zh-cn libatomic libltdl liblua5.4
+libmbedtls frpc frps luci-app-frpc luci-app-frps luci-i18n-frpc-zh-cn luci-i18n-frps-zh-cn nginx-full
+nginx-mod-stream nginx-ssl-util"
 
 # --- 来源 A：容器里已经存在的 ipk ---
 # 构建本来就要把用到的包取到本地，能捞到就别再下载一遍（省流量也省时间）。
