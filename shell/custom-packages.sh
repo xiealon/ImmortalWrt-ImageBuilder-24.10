@@ -190,3 +190,11 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES xz tar liblzma gnupg getopt cgroup-tools ip-fu
 #   ② bootstrap 的 _preflight —— 每次引导开头 command -v timeout，缺了就
 #      _rom_restore_pkg coreutils-timeout 1（PCR_FORCE=1 强制重装，记账一起同步）。
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES coreutils-timeout"
+# 【2026-11-19】用户定：这些工具都要有 LuCI 界面。
+#   gost      → 反代/隧道/转发（luci-app-gost）
+#   tinyproxy → 正向代理（luci-app-tinyproxy）
+#   frpc/frps → 自建中转（luci-app-frpc / luci-app-frps）
+#   无界面的 haproxy / lighttpd / stunnel 已从库中移除；socat 作为依赖保留。
+CUSTOM_PACKAGES="$CUSTOM_PACKAGES gost luci-app-gost luci-i18n-gost-zh-cn"
+CUSTOM_PACKAGES="$CUSTOM_PACKAGES tinyproxy luci-app-tinyproxy luci-i18n-tinyproxy-zh-cn"
+CUSTOM_PACKAGES="$CUSTOM_PACKAGES frpc frps luci-app-frpc luci-app-frps luci-i18n-frpc-zh-cn luci-i18n-frps-zh-cn"
