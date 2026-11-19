@@ -740,7 +740,7 @@ if [ -s "$_idx_all" ]; then
             m = split(skip, S, " ")
             for (i = 1; i <= m; i++) skipped[S[i]] = 1
         }
-        /^Package: / { cur = $2; next }
+        /^Package: / { cur = $2; all[cur] = 1; next }
         /^Depends: / {
             s = $0
             sub(/^Depends:[ \t]*/, "", s)
@@ -758,6 +758,22 @@ if [ -s "$_idx_all" ]; then
             next
         }
         END {
+            # 【2026-11-19 修 · 别名展开】白名单写的是「源包名」（libpcap / jansson /
+            # libcurl / libblkid / libxml2 / libruby …），而官方 Packages 索引里的包名带
+            # soname 后缀（libpcap1 / jansson4 / libcurl4 / libblkid1 / libxml2-16 /
+            # libruby3.4）。只按字面名匹配，这些包永远收不到 —— 这就是之前
+            # 「白名单里这些包没收到」那一长串的根因。
+            # 规则与 25.12 线一致：前缀相等 + 尾巴只含数字/点/连字符（libnl-core 这类
+            # 带字母的子包不会被误收）。
+            for (k in all) {
+                if (k in wanted) continue
+                for (i = 1; i <= n; i++) {
+                    w = W[i]
+                    if (substr(k, 1, length(w)) != w) continue
+                    tail = substr(k, length(w) + 1)
+                    if (tail ~ /^[-0-9.]+$/) { wanted[k] = 1; break }
+                }
+            }
             qn = 0
             for (p in wanted) q[++qn] = p
             i = 1
