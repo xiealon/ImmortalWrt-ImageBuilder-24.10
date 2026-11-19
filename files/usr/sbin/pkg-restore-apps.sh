@@ -341,6 +341,22 @@ _pa_oc_files_repair() {
     return 0
 }
 
+# 【2026-11-19 用户定】开机补充组：**只走开机那一次 --repair**，不进 _PA_LIST / --check / --list。
+# 这批 luci-app 固件里装着，但既不在保护组、也不在 manifest.txt，被 opkg remove 后只能手装。
+# 名单与 25.12 线保持一致（22 个）；partexp / taskplan 的 ipk 由 build24.sh 的白名单收进 pkg-cache。
+_PA_BOOT_APPS="luci-app-3ginfo-lite luci-app-aria2 luci-app-cifs-mount luci-app-diskman luci-app-email luci-app-filemanager luci-app-firewall luci-app-hd-idle luci-app-ksmbd luci-app-nfs luci-app-openvpn luci-app-p910nd luci-app-package-manager luci-app-partexp luci-app-rtp2httpd luci-app-sqm luci-app-taskplan luci-app-timewol luci-app-ttyd luci-app-uhttpd luci-app-upnp luci-app-wechatpush"
+
+# 开机补充组里「该有却没有」的（只给 --repair 用）
+_pa_missing_boot() {
+    _pa_mbo=""
+    for _pa_p in $_PA_BOOT_APPS; do
+        _pa_should "$_pa_p" || continue
+        if _pa_installed "$_pa_p" && _pa_files_ok "$_pa_p"; then continue; fi
+        _pa_mbo="$_pa_mbo $_pa_p"
+    done
+    printf '%s\n' "$_pa_mbo" | sed 's/^ *//'
+}
+
 _pa_missing() {
     _pa_m=""
     for _pa_p in $_PA_LIST; do
@@ -382,6 +398,27 @@ _pa_list() {
 }
 
 _pa_repair() {
+    # 【2026-11-19】开机补充组先补（与 25.12 线同序：先依赖/补充组，再主清单）
+    _pa_bm=$(_pa_missing_boot)
+    if [ -n "$_pa_bm" ]; then
+        for _pa_p in $_pa_bm; do
+            log "装回 $_pa_p（开机补充组）"
+            if _pa_installed "$_pa_p"; then
+                if "$_RESTORE" --force "$_pa_p"; then
+                    log "装回完成 $_pa_p（强制重装）"
+                else
+                    log "装回失败 $_pa_p（强制重装没成功）"
+                fi
+            elif _pa_add_local "$_pa_p"; then
+                log "装回完成 $_pa_p（开机补充组）"
+            else
+                log "装回失败 $_pa_p（本地 pkg-cache 没有它的 ipk）"
+            fi
+        done
+        rm -f /tmp/luci-indexcache* 2>/dev/null
+        rm -rf /tmp/luci-modulecache/* 2>/dev/null
+        [ -x /etc/init.d/uhttpd ] && /etc/init.d/uhttpd reload >/dev/null 2>&1
+    fi
     # OpenClash 内核/geo 数据不属任何包，先按 /rom 出厂副本补一次
     if ! _pa_oc_files_ok; then
         _pa_oc_files_repair
@@ -424,6 +461,7 @@ _pa_repair() {
     # 装完必须重判。opkg 侧 _pa_installed 有缓存，先清掉再算。
     _PA_CACHE=""
     [ -z "$(_pa_missing)" ] || return 1
+    [ -z "$(_pa_missing_boot)" ] || return 1
     if ! _pa_oc_files_ok; then
         return 1
     fi
