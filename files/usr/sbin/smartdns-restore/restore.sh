@@ -131,6 +131,10 @@ else
     _fixed="$_fixed 06-apply"
 fi
 
+# 【2026-11-19 同步 25.12】STEPS 里写了 95-luci，但主流程只跑 01~06，95 永远不执行。
+_sd_restore_step 95-luci || { log "界面恢复失败（只读基座里没有它的安装清单）"; }
+
+
 if [ -z "$_fixed" ]; then
     log "全部步骤达标，未改动任何配置，DNS 未中断"
 else
