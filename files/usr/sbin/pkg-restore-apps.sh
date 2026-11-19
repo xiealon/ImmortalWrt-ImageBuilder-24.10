@@ -264,6 +264,12 @@ _pa_should() {
     for _pa_f in "$ROMDIR/root/pkg-cache/$1"_*.ipk; do
         [ -f "$_pa_f" ] && return 0
     done
+    # 【2026-11-19】别名兜底：白名单写能力名 ip，而固件实测装的是 ip-full
+    # （/usr/bin/ip 由 ip-full 提供），不兜底时这条会永远判「固件未带」。
+    # 25.12 线已按同一思路修（那边查 /rom/lib/apk/db/installed 的 P: 行）。
+    case "$1" in
+    ip) [ -f "$ROMDIR/usr/lib/opkg/info/ip-full.list" ] && return 0 ;;
+    esac
     return 1
 }
 
