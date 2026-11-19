@@ -897,9 +897,14 @@ if [ "$_pc_bad" -gt 0 ]; then
 fi
 
 # --- 白名单缺口报告 ---
+# 【2026-11-19 修】原来按 ls "$_PC_DIR"/${_p}_*.ipk 判「有没有收到」——只认字面名。
+# 而实际下载用的是 soname 真名（libpcap -> libpcap1_*.ipk、jansson -> jansson4_*.ipk、
+# libxml2 -> libxml2-16_*.ipk），于是包明明收进来了，这里仍然报「没收到」。
+# 改成按目录清单做正则：允许包名后跟 [-.0-9]*（soname 数字段），与别名展开规则一致。
 _pc_gap=""
+_pc_files=$(ls "$_PC_DIR" 2>/dev/null)
 for _p in $_PC_WANT; do
-    if ! ls "$_PC_DIR"/${_p}_*.ipk >/dev/null 2>&1; then
+    if ! printf '%s\n' "$_pc_files" | grep -Eq "^${_p}[-.0-9]*_"; then
         _pc_gap="$_pc_gap $_p"
     fi
 done
