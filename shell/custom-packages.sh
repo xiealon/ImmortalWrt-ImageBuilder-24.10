@@ -31,6 +31,9 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES nftables-json"
 
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES dockerd luci-app-dockerman luci-i18n-dockerman-zh-cn cgroup-tools kmod-veth"
+# 【2026-11-20 用户定】luci-app-store（商店）固定随固件走 —— 与 lxc / docker 同一档，
+# 不再提供构建开关（workflow 里的「Enable Store」已删除，改由构建步骤无条件追加一行）。
+# 想卸就在设备上 apk del luci-app-store，包库里有 apk，开机补充组也认得它。
 
 # 【2026-11-02】easytier 整组移除（用户定：组网只留 tailscale）。
 # easytier 是 P2P 组网工具，与 zerotier / tailscale 同属「把设备连成虚拟局域网」，
