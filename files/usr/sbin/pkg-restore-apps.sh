@@ -19,12 +19,7 @@
 #   pkg-restore-apps.sh [--repair]  装回缺的那些，再复判一次
 #                                   0 = 全部在位；1 = 仍有缺（或装不上）
 #
-# 【2026-11-10】adblock 整组移出本脚本，独立成 /usr/sbin/adblock/：
-#   它的恢复 / 配置 / 规则文件 / 删除重建四项都由那边按步骤管，
-#   本脚本只管代理内核（clashoo / daed / sing-box）与 geo 数据。
-#   移除理由：adblock 是本机唯一允许「删了重装」的包，而那条链要整链删除
-#   （单独 del 主包会被 luci-i18n 的反向依赖挡住），代码形态与本脚本的
-#   逐包恢复不同，混在一处两套白名单会互相干扰。
+# 【2026-11-21 用户定】adblock 整套不进固件：不装包、不进保护组、不预置名单与配置。
 #
 # 判据主体是包管理器认不认。本版写死 apk（25.12 线只有 apk）：apk info -e。
 # 【2026-11-02】原 daed-geoip / daed-geosite 的软链接例外随 daed 一并移除
@@ -116,9 +111,6 @@ _RESTORE="${RESTORE_BIN:-$SROOT/usr/sbin/pkg-restore.sh}"
 #   daed / luci-app-daede / vmlinux-btf
 #   sing-box
 #   v2ray-geoip / v2ray-geosite（2026-11-02 补入，只判包不判文件，见 _PA_GEO）
-#   （adblock / luci-app-adblock / luci-i18n-adblock-zh-cn 三包 2026-11-10 移出本脚本，
-#     归 /usr/sbin/adblock/ 独立管理；包库里它们的 apk 照旧收在 build25.sh 的 _AK_WANT，
-#     移除只是换了管它的脚本，不是取消保护）
 #
 # vmlinux-btf 为什么也进 daed 组（2026-11-10）：
 #   daed 的 Makefile 写着 +DAED_USE_VMLINUX_BTF:vmlinux-btf，包内 Depends
@@ -211,8 +203,7 @@ _PA_HONK="honk luci-app-honk"
 # 固件装 adblock / luci-app-adblock / luci-i18n-adblock-zh-cn 三件，
 # 屏蔽表、feed、DNS 对接全留给用户在 LuCI 里开；原先的专用四态脚本
 # （/usr/sbin/adblock/restore.sh 那套会写 uci、重建名单）已整体删除。
-_PA_ADBLOCK="adblock luci-app-adblock luci-i18n-adblock-zh-cn"
-_PA_PKGONLY="$_PA_OC $_PA_CERT $_PA_DDNS $_PA_TOOLS $_PA_SSRP $_PA_DAED $_PA_HONK $_PA_WEB $_PA_ADBLOCK"
+_PA_PKGONLY="$_PA_OC $_PA_CERT $_PA_DDNS $_PA_TOOLS $_PA_SSRP $_PA_DAED $_PA_HONK $_PA_WEB"
 
 # 【2026-11-02】daed 在 25.12 线已被 honk 取代（用户定），原来的 geo 软链接判据一并删除：
 #   honk 的规则集不走 /usr/share/daed/*.dat 软链接，而是按 native_api.geosite_download_url /
@@ -223,7 +214,7 @@ _PA_PKGONLY="$_PA_OC $_PA_CERT $_PA_DDNS $_PA_TOOLS $_PA_SSRP $_PA_DAED $_PA_HON
 # 【2026-11-10】_PA_HONK 并入清单：_PA_PKGONLY 原本写了 honk 三包却不进 _PA_LIST，
 # 等于「判据写了、范围没进去」。这些包只有对应变体才有，靠 _pa_should 按
 # /rom/usr/lib/opkg/info/<包>.list 过滤 —— 没有该包的线上自动跳过，不误报。
-_PA_LIST="${CS_PROBE_APPS:-$_PA_OC $_PA_CERT $_PA_DDNS $_PA_TOOLS $_PA_SSRP $_PA_GEO $_PA_DAED $_PA_COMMON $_PA_HONK} $_PA_WEB $_PA_ADBLOCK"
+_PA_LIST="${CS_PROBE_APPS:-$_PA_OC $_PA_CERT $_PA_DDNS $_PA_TOOLS $_PA_SSRP $_PA_GEO $_PA_DAED $_PA_COMMON $_PA_HONK} $_PA_WEB"
 
 log() { printf '[APP] %s\n' "$*"; }
 
