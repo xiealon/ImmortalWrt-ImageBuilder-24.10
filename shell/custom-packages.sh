@@ -99,7 +99,7 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-3ginfo-lite luci-i18n-3ginfo-lite-zh-
 # imm.config 里 CONFIG_PACKAGE_adblock / CONFIG_PACKAGE_luci-app-adblock 都是 not set，
 # 所以固件里有没有这套全看这一行。加了它必须同步进 pkg-restore-apps.sh 的
 # _PA_ADBLOCK 与 build24.sh 的 _PC_WANT，否则「装上了但被 remove 掉没人管」。
-CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-i18n-adblock-zh-cn"
+# 【2026-11-21 用户定】adblock 整套移除：不再装 adblock / luci-app-adblock / luci-i18n-adblock-zh-cn，也不预置名单。
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-openvpn luci-i18n-openvpn-zh-cn openvpn-openssl"
 
