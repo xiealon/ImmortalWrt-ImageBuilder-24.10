@@ -94,12 +94,7 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-3ginfo-lite luci-i18n-3ginfo-lite-zh-
 # 删了只丢图形编辑界面，rpcd 的 ACL 仍可用 uci / 直接编辑 /etc/config/rpcd 配。
 # 24 线这里是 luci-app-acl + i18n 两包，删整行即整组不进固件。
 
-# 【2026-11-02】adblock（用户当日定：先留着，也保护起来）。
-# 这条链是 i18n → luci-app-adblock → adblock，写一行三个全装；
-# imm.config 里 CONFIG_PACKAGE_adblock / CONFIG_PACKAGE_luci-app-adblock 都是 not set，
-# 所以固件里有没有这套全看这一行。加了它必须同步进 pkg-restore-apps.sh 的
-# _PA_ADBLOCK 与 build24.sh 的 _PC_WANT，否则「装上了但被 remove 掉没人管」。
-# 【2026-11-21 用户定】adblock 整套移除：不再装 adblock / luci-app-adblock / luci-i18n-adblock-zh-cn，也不预置名单。
+# 【2026-11-21 用户定】adblock 整套不装：不再安装 adblock / luci-app-adblock / luci-i18n-adblock-zh-cn。
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-openvpn luci-i18n-openvpn-zh-cn openvpn-openssl"
 
@@ -144,9 +139,7 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES yq kmod-dummy ca-bundle"
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES miniupnpd-nftables luci-app-upnp luci-i18n-upnp-zh-cn"
 
-# 【2026-11-02】mosdns 移除（用户定：DNS 只留 smartdns + adblock 这条链）。
-# DNS 层已有两层：smartdns 做加速/分流/缓存，adblock 生成广告黑名单喂给它
-# （adblock 的 adb_dns 可设 smartdns，smartdns 的 conf_files 指向 adb 规则）。
+# 【2026-11-02】mosdns 移除（用户定）：DNS 只留 smartdns 一层，做加速/分流/缓存。
 # 再加 mosdns 是第三个分流器，默认 5335 且 redirect 会抢 53，与 smartdns 冲突。
 # v2ray-geoip / v2ray-geosite 保留 —— 这两个是通用 geo 数据，geoview 与
 # daed 都要用，不跟 mosdns 绑定。
