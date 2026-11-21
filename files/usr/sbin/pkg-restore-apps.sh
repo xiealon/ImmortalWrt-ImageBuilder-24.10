@@ -199,10 +199,7 @@ _PA_COMMON="sing-box"
 # 结论：这三个组只走 _pa_installed（opkg list-installed），文件级一律放行。
 # 二进制真被删了，重装包自然连文件一起回来；配置文件不被任何自动动作碰。
 _PA_HONK="honk luci-app-honk"
-# 【2026-11-21 用户定】adblock 只做**包级保护**、不做任何配置：
-# 固件装 adblock / luci-app-adblock / luci-i18n-adblock-zh-cn 三件，
-# 屏蔽表、feed、DNS 对接全留给用户在 LuCI 里开；原先的专用四态脚本
-# （/usr/sbin/adblock/restore.sh 那套会写 uci、重建名单）已整体删除。
+# 【2026-11-21 用户定】adblock 整套不进固件：不装包、不进保护组、不预置名单与配置。
 _PA_PKGONLY="$_PA_OC $_PA_CERT $_PA_DDNS $_PA_TOOLS $_PA_SSRP $_PA_DAED $_PA_HONK $_PA_WEB"
 
 # 【2026-11-02】daed 在 25.12 线已被 honk 取代（用户定），原来的 geo 软链接判据一并删除：
