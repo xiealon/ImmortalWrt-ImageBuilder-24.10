@@ -97,9 +97,6 @@ else
     rm -f files/usr/share/v2ray/geosite.dat files/usr/share/v2ray/geoip.dat
 fi
 
-# 【2026-11-21 用户定】adblock 不再预置任何配置/名单：固件只装包（adblock 三件），
-# 屏蔽表、feed、DNS 对接统统交给用户在 LuCI 里自己开。原构建期注入
-# Loyalsoldier reject-list.txt → files/etc/adblock/adblock.blocklist 的整段已删除。
     URL=$(curl -s https://api.github.com/repos/vernesong/OpenClash/releases/latest \
       | grep "browser_download_url.*ipk" \
       | head -n1 \
@@ -360,7 +357,7 @@ echo "==> 容器内受保护文件已进固件（16 个，/rom 只读基准）"
 # 它靠 git mode 恰好是 755 才没出事，一旦哪次提交丢了执行位，docker 会在
 # 开机时静默失败（devices cgroup 没挂 → dockerd 退出 → docker0 不建）。
 # 【2026-11-10】改成递归扫。原来 files/usr/sbin/*.sh 只匹配**一层**，
-# 拆分后的 bootstrap/ smartdns/ adblock/ 三个子目录（33 个 .sh）全在匹配之外；
+# 拆分后的 bootstrap/ smartdns-restore/ 两个子目录（其中的 .sh）全在匹配之外；
 # 末尾的 2>/dev/null 又把 "No such file" 静默吞掉 —— 权限真丢了也看不出来。
 # 校验循环同样改递归：只 chmod 不校验，等于加了个看不见的兜底。
 chmod +x files/etc/rc.local 2>/dev/null || true
