@@ -389,6 +389,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build ImmortalWrt x86-64 EFI 24.10.x
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           profile="${{ github.event.inputs['Profile'] }}"
           case "$profile" in
