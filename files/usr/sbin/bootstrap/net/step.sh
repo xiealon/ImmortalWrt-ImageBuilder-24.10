@@ -383,8 +383,8 @@ verify_dhcp_ignore() {
     # 验的是 build 写进去的那套值，任一项不符就判需修复。
     [ -z "$(run uci -q get dhcp.lan.ignore 2>/dev/null)" ] || return 1
     [ "$(run uci -q get dhcp.lan.dhcpv4 2>/dev/null)" = "disabled" ] || return 1
-    [ "$(run uci -q get dhcp.lan.ra 2>/dev/null)" = "server" ] || return 1
-    [ "$(run uci -q get dhcp.lan.ra_preference 2>/dev/null)" = "high" ] || return 1
+# 【2026-11-23 用户定】不再校验/写 RA 相关项（彻底不管 IPv6）
+# 【2026-11-23 用户定】不再校验/写 RA 相关项（彻底不管 IPv6）
     # 【2026-11-15 用户定】dns_service 必须为空（删掉），靠 odhcpd 默认值 = true。
     # 写成显式的 0 才是真的关掉 RDNSS —— 那属于手改，判失败让 build 删掉。
     [ -z "$(run uci -q get dhcp.lan.dns_service 2>/dev/null)" ] || return 1
