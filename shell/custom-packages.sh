@@ -94,8 +94,11 @@ CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-3ginfo-lite luci-i18n-3ginfo-lite-zh-
 # 删了只丢图形编辑界面，rpcd 的 ACL 仍可用 uci / 直接编辑 /etc/config/rpcd 配。
 # 24 线这里是 luci-app-acl + i18n 两包，删整行即整组不进固件。
 
-# 【2026-11-21 用户定】adblock 整套不装：连 luci-app-adblock / i18n 都不进固件
-# （中途改成过「包级保护」，当天又撤回 —— 它会破坏广告中转页的跳转流程）。
+# 【2026-11-23 用户定】adblock 只做**包级保护**、不做任何配置：固件装 adblock /
+# luci-app-adblock / luci-i18n-adblock-zh-cn 三件，屏蔽表、feed、DNS 对接一律不预置，
+# 要用的人在 LuCI 里自己开（出厂默认 disabled）。
+# 这条链是 i18n → luci-app-adblock → adblock，写一行三个全装。
+CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-i18n-adblock-zh-cn"
 
 CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-openvpn luci-i18n-openvpn-zh-cn openvpn-openssl"
 
