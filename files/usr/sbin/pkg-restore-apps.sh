@@ -225,6 +225,8 @@ log() { printf '[APP] %s\n' "$*"; }
 # 手动 rm 掉再 --check 立刻 rc=0。凡装过包就调一次，宁可多花一次 apk info。
 _pa_snap_reset() {
     rm -f "$_pa_snap_inst" "$_pa_snap_fact" 2>/dev/null
+    # 24.10 线没有快照文件，已装名单缓存在变量里：不清这一行等于没作废。
+    _PA_CACHE=""
     return 0
 }
 
@@ -368,6 +370,52 @@ _pa_missing_boot() {
     printf '%s\n' "$_pa_mbo" | sed 's/^ *//'
 }
 
+# 【2026-11-24 用户定】全量兜底（opkg 版）—— 对齐 25.12 线的「固件装过什么就补什么」。
+# 原来的保护只有策展组（45 条）+ 开机补充组（22 个 luci-app）+ OpenClash 数据文件，
+# 名单外的包（依赖库、没进名单的 kmod / 工具）被删掉时 --check 照样返回 0，不会补。
+# 判据与 25.12 同构：
+#   期望 = /rom/usr/lib/opkg/status 的 Package: 行（出厂已装全表，只读基底删不掉）
+#            ∩ /rom/root/pkg-cache 里真有 <包名>_*.ipk
+#   实为 = opkg list-installed
+# 差集逐个用 _pa_add_local 装回。只用文件集合运算（busybox 没有 comm），
+# 一次 grep 判完，避免 600 次 fork 把开机拖住。
+_pa_missing_all() {
+    _pa_aa_fa=/tmp/.pa-fac-all
+    _pa_aa_in=/tmp/.pa-inst-all
+    _pa_aa_hv=/tmp/.pa-have-ipk.raw
+    _pa_aa_hvs=/tmp/.pa-have-ipk
+    _pa_aa_ex=/tmp/.pa-exp-all
+    sed -n 's/^Package: //p' "$ROMDIR/usr/lib/opkg/status" 2>/dev/null | sort -u > "$_pa_aa_fa"
+    [ -s "$_pa_aa_fa" ] || { rm -f "$_pa_aa_fa"; return 0; }
+    opkg list-installed 2>/dev/null | sed -n 's/ - .*//p' | sort -u > "$_pa_aa_in"
+    : > "$_pa_aa_hv"
+    for _pa_aa_f in "$ROMDIR"/root/pkg-cache/*.ipk; do
+        [ -f "$_pa_aa_f" ] || continue
+        _pa_aa_b="${_pa_aa_f##*/}"
+        printf '%s\n' "${_pa_aa_b%%_*}" >> "$_pa_aa_hv"
+    done
+    # busybox 的 sort 不认 `-o`（实测：会当文件名，把内容直接吐到标准输出），
+    # 所以去重必须写成「输出到另一个文件再换名」，不能原地 -o。
+    sort -u "$_pa_aa_hv" > "$_pa_aa_hvs"
+    # 空模式文件在 busybox grep 上行为不一致（实测：`-f 空文件` 判「全不匹配」，
+    # 加 -v 后一行都不输出），所以两个输入都要先判非空，不能直接喂给 -f。
+    if [ -s "$_pa_aa_hvs" ]; then
+        grep -x -F -f "$_pa_aa_hvs" "$_pa_aa_fa" > "$_pa_aa_ex"
+    else
+        : > "$_pa_aa_ex"
+    fi
+    # 结果先进变量再清临时文件：否则一边输出一边删，容易读到半截文件。
+    if [ -s "$_pa_aa_in" ]; then
+        _pa_aa_out=$(grep -vx -F -f "$_pa_aa_in" "$_pa_aa_ex")
+    else
+        # 一个包都没装（极端情况）：期望集合原样全算缺失
+        _pa_aa_out=$(cat "$_pa_aa_ex")
+    fi
+    rm -f "$_pa_aa_fa" "$_pa_aa_in" "$_pa_aa_hv" "$_pa_aa_hvs" "$_pa_aa_ex"
+    [ -n "$_pa_aa_out" ] && printf '%s\n' "$_pa_aa_out"
+    return 0
+}
+
 _pa_missing() {
     _pa_m=""
     for _pa_p in $_PA_LIST; do
@@ -384,12 +432,15 @@ _pa_check() {
     _pa_snap_reset
     _pa_cm=$(_pa_missing)
     [ -n "$_pa_cm" ] && printf '%s\n' "$_pa_cm"
+    # 【2026-11-24】全量兜底：出厂装过、现在缺了的（名单外的包也要能报出来）
+    _pa_ca=$(_pa_missing_all)
+    [ -n "$_pa_ca" ] && printf '%s\n' "$_pa_ca"
     _pa_oc_bad=0
     if ! _pa_oc_files_ok; then
         printf 'openclash-core(文件缺失)\n'
         _pa_oc_bad=1
     fi
-    [ -z "$_pa_cm" ] && [ "$_pa_oc_bad" = 0 ]
+    [ -z "$_pa_cm" ] && [ -z "$_pa_ca" ] && [ "$_pa_oc_bad" = 0 ]
 }
 
 _pa_list() {
@@ -416,7 +467,6 @@ _pa_repair() {
     # 下一批才不会拿装之前的旧名单去判「谁还缺」。
     _pa_snap_reset
     # 【2026-11-19】开机补充组先补（与 25.12 线同序：先依赖/补充组，再主清单）
-    _pa_snap_reset
     _pa_bm=$(_pa_missing_boot)
     if [ -n "$_pa_bm" ]; then
         for _pa_p in $_pa_bm; do
@@ -468,7 +518,6 @@ _pa_repair() {
             log "装回失败 $_pa_p（本地包库没有它，或依赖缺失待 --deps 补齐）"
         fi
     done
-    [ "$_pa_n" -gt 0 ] || log "无需装回（没有「该有却缺失」的应用）"
     # 【2026-11-18】LuCI 菜单索引缓存里存的是「装包前」的模块列表：自愈装回
     # luci-app-* 之后，浏览器强刷也看不到新菜单（实测 honk：「服务」菜单整项
     # 不出现，必须手工 rm /tmp/luci-indexcache* 才恢复）。装完就清一次。
@@ -477,13 +526,30 @@ _pa_repair() {
         rm -rf /tmp/luci-modulecache/* 2>/dev/null
         [ -x /etc/init.d/uhttpd ] && /etc/init.d/uhttpd reload >/dev/null 2>&1
     fi
-    # 装完必须重判。opkg 侧 _pa_installed 有缓存，先清掉再算。
-    _PA_CACHE=""
-    # 装完必须重判。apk 本身没有缓存，直接重算即可 —— 但快照有缓存，先作废，
-    # 否则读的是装之前的旧名单：包明明装回来了也返回 1（V4 #8 开机实测）。
+    # 【2026-11-24】全量兜底：出厂装过的一切（应用/库/kmod），缺了就按 pkg-cache 装回。
+    # opkg 侧没有 apk 那种索引解析，只能逐个点名装（_--force-reinstall 只重装这一个包，
+    # 不会拉依赖树；依赖真缺时交给 --deps 那一层）。
+    _pa_snap_reset
+    _pa_an=0
+    for _pa_p in $(_pa_missing_all); do
+        _pa_an=$((_pa_an + 1))
+        log "装回 $_pa_p（全量保护）"
+        if _pa_installed "$_pa_p"; then
+            "$_RESTORE" --force "$_pa_p" >/dev/null 2>&1 \
+                && log "装回完成 $_pa_p（强制重装）" \
+                || log "装回失败 $_pa_p（强制重装没成功）"
+        elif _pa_add_local "$_pa_p"; then
+            log "装回完成 $_pa_p（全量保护）"
+        else
+            log "装回失败 $_pa_p（本地 pkg-cache 没有它的 ipk）"
+        fi
+    done
+    [ "$((_pa_n + _pa_an))" -gt 0 ] || log "无需装回（没有「该有却缺失」的包）"
+    # 装完必须重判。opkg 侧已装名单缓存在 _PA_CACHE 里，先作废再算。
     _pa_snap_reset
     [ -z "$(_pa_missing)" ] || return 1
     [ -z "$(_pa_missing_boot)" ] || return 1
+    [ -z "$(_pa_missing_all)" ] || return 1
     if ! _pa_oc_files_ok; then
         return 1
     fi
