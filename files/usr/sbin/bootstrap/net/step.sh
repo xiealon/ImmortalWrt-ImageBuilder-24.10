@@ -785,14 +785,13 @@ build_dhcp_ignore() {
     # DHCPv6 Information-request（超时后回退到 RDNSS），不影响功能。
     run uci -q delete dhcp.lan.ignore
     run uci -q set dhcp.lan.dhcpv4='disabled'
-    run uci -q set dhcp.lan.ra='server'
+    # 【2026-11-23 用户定】不再写 dhcp.lan.ra（v6 由 98-ipv6-off.sh 首关一次，脚本不碰）
     # 【2026-11-14 用户定】不写 dhcpv6：地址由 SLAAC 下发，不需要有状态 DHCPv6。
     # 实测（192.168.1.201）：dhcpv6 关着，Windows 一样从 RA 拿到 8c01 段地址
     # （PrefixOrigin=RouterAdvertisement）。开着反而有风险——一旦 ra_flags 带
     # managed-config，它会真去分配地址，可能又抢到光猫的 8c00 段。
     # 固件 /rom/etc/uci-defaults/15_odhcpd 本来就写 disabled，保持默认即可。
-    run uci -q set dhcp.lan.ra_preference='high'
-    # 【2026-11-15 用户定】dns_service 也删掉，不写 1。
+        # 【2026-11-15 用户定】dns_service 也删掉，不写 1。
     # odhcpd 源码 clean_interface() 里它默认就是 true（config.c:331），删掉照样发 RDNSS；
     # 留个显式值只会多一个会被手改的项。实测：删掉后 RA 里 RDNSS 正常出现。
     run uci -q delete dhcp.lan.dns_service
