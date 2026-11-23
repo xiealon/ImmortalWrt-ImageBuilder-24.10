@@ -220,6 +220,15 @@ log() { printf '[APP] %s\n' "$*"; }
 
 # 24.10 线才需要 _PA_CACHE（opkg list-installed 是全表扫描，缓存后只跑一次）；
 # 25.12 的 apk info -e 直接问包数据库，不需要缓存，本文件不保留这个变量。
+# 【2026-11-24】装完包必须作废快照，否则后面再判「还缺谁」读的是装之前的旧名单。
+# 实测（V4 #8 开机）：12 个包包回后仍报 rc=1，因为 /tmp/.pa-installed 停在修复前；
+# 手动 rm 掉再 --check 立刻 rc=0。凡装过包就调一次，宁可多花一次 apk info。
+_pa_snap_reset() {
+    rm -f "$_pa_snap_inst" "$_pa_snap_fact" 2>/dev/null
+    return 0
+}
+
+
 _pa_installed() {
     if [ -z "$_PA_CACHE" ]; then
         _PA_CACHE=$(opkg list-installed 2>/dev/null | sed -n 's/ - .*//p')
@@ -370,6 +379,9 @@ _pa_missing() {
 }
 
 _pa_check() {
+    # 【2026-11-24】先把快照作废再判：check 的结论必须是「此刻」的现场。
+    # 否则刚跑完 repair 的进程留下旧快照，下一次 check 会把已装回的包又报成缺失。
+    _pa_snap_reset
     _pa_cm=$(_pa_missing)
     [ -n "$_pa_cm" ] && printf '%s\n' "$_pa_cm"
     _pa_oc_bad=0
@@ -400,7 +412,11 @@ _pa_list() {
 }
 
 _pa_repair() {
+    # 【2026-11-24】开跑先作废快照：判据必须是当下现场；每装完一批再作废一次，
+    # 下一批才不会拿装之前的旧名单去判「谁还缺」。
+    _pa_snap_reset
     # 【2026-11-19】开机补充组先补（与 25.12 线同序：先依赖/补充组，再主清单）
+    _pa_snap_reset
     _pa_bm=$(_pa_missing_boot)
     if [ -n "$_pa_bm" ]; then
         for _pa_p in $_pa_bm; do
@@ -425,6 +441,7 @@ _pa_repair() {
     if ! _pa_oc_files_ok; then
         _pa_oc_files_repair
     fi
+    _pa_snap_reset
     _pa_n=0
     for _pa_p in $(_pa_missing); do
         _pa_n=$((_pa_n + 1))
@@ -462,6 +479,9 @@ _pa_repair() {
     fi
     # 装完必须重判。opkg 侧 _pa_installed 有缓存，先清掉再算。
     _PA_CACHE=""
+    # 装完必须重判。apk 本身没有缓存，直接重算即可 —— 但快照有缓存，先作废，
+    # 否则读的是装之前的旧名单：包明明装回来了也返回 1（V4 #8 开机实测）。
+    _pa_snap_reset
     [ -z "$(_pa_missing)" ] || return 1
     [ -z "$(_pa_missing_boot)" ] || return 1
     if ! _pa_oc_files_ok; then
