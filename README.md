@@ -21,9 +21,9 @@ eBPF 代理用 **新版 daed 三件套**（`daed` / `luci-app-daede` / `vmlinux-
 
 ## 四条线的差异
 
-| | 25.12 | 25.12-honk | 25.12-daed | 24.10 |
+| | 25.12 | 25.12-honk x | 25.12-daed x | 24.10 |
 |---|---|---|---|---|
-| 用途 | **主线，官方源 + daed** | **纯 honk** | **honk（+ 预留 daed）** | 老版本线，官方源 + daed |
+| 用途 | **官方源 + honkdaed** | **纯 honk** | **honk（+ 预留 daed）** | 老版本线，官方源 + daed |
 | workflow | 28,825 B / 500 行 | 37,645 B / 644 行 | 37,419 B / 641 行 | 27,853 B / 494 行 |
 | `runs-on` | ubuntu-22.04 | **ubuntu-24.04** | **ubuntu-24.04** | ubuntu-22.04 |
 | ImageBuilder | 官方 docker `x86-64-openwrt-25.12.0/1/2` | **自建 IB**，`v25.12.2-ib-x86-64-r2` | **自建 IB**，同左 | 官方 docker `24.10.0 ~ 24.10.6` |
